@@ -8,7 +8,7 @@
   <style>
     .closed-pattern {
       background-color: #f1f5f9;
-      background-image: repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 4px, #f1f5f9 4px, #f1f5f9 8px);
+      background-image: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 3px, #f1f5f9 3px, #f1f5f9 8px);
     }
 
     /* ========================================== */
@@ -40,7 +40,6 @@
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
-      /* テーブルの余分なはみ出しを防ぐ */
       table {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
@@ -49,11 +48,27 @@
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
-      /* 印刷時のフォントサイズとパディングをスリム化 */
       th, td {
         padding: 2px 1px !important;
         font-size: 10px !important;
         line-height: 1.2 !important;
+      }
+
+      /* 定休日の網掛け（印刷時） */
+      .closed-pattern {
+        background-color: #f1f5f9 !important;
+        background-image: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 3px, #f1f5f9 3px, #f1f5f9 8px) !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      /* シフトが入っているセルの薄い塗りつぶし（印刷時） */
+      .cell-assigned {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+        font-weight: bold !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
     }
   </style>
@@ -385,7 +400,7 @@
     </div>
   </div>
 
-  <!-- 入り時間選択モーダル（管理者用） -->
+  <!-- 入り時間選択モーダル（管理者用：15:00〜20:00） -->
   <div id="editModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -397,7 +412,8 @@
         ✨ ALL
       </button>
 
-      <div id="timeButtonsGrid" class="grid grid-cols-2 gap-1.5"></div>
+      <!-- 15:00〜20:00のボタン群 -->
+      <div id="timeButtonsGrid" class="grid grid-cols-3 gap-1.5"></div>
 
       <div class="flex gap-2 pt-2 border-t border-slate-100">
         <button onclick="setShiftValue('休み')" class="flex-1 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200">休み</button>
@@ -412,7 +428,15 @@
     // ==========================================
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzhZF_FFdjS7TDegj33pnMPkgPZUe414S9eMkxB09yG62sX3kmgPQ5ZU4pJm2VuUYHL5A/exec';
 
-    const ENTRY_TIMES = ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+    // スタッフ用（17:00〜20:00）
+    const STAFF_ENTRY_TIMES = ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+    // 管理者調整用（15:00〜20:00）
+    const ADMIN_ENTRY_TIMES = [
+      '15:00', '15:30', '16:00', '16:30',
+      '17:00', '17:30', '18:00', '18:30',
+      '19:00', '19:30', '20:00'
+    ];
+
     const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
     const HOLIDAYS = { '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日' };
 
@@ -613,8 +637,9 @@
         selMonth.appendChild(opt);
       }
 
+      // 管理者用の時間ボタン（15:00〜20:00）
       const grid = document.getElementById('timeButtonsGrid');
-      ENTRY_TIMES.forEach(t => {
+      ADMIN_ENTRY_TIMES.forEach(t => {
         const btn = document.createElement('button');
         btn.className = "py-1.5 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-indigo-50 hover:text-indigo-600 transition";
         btn.textContent = t;
@@ -1088,23 +1113,28 @@
           const val = dataSource[`${s}_${d.dateKey}`] || '';
 
           if (d.isClosed) {
+            // 定休日の網掛けスタイル
             td.className = "border border-slate-300 closed-pattern text-slate-400 select-none";
             td.textContent = "-";
           } else {
             let cellStyle = 'text-slate-300';
+            let printAssignClass = '';
+
             if (val === '休み') {
               cellStyle = 'bg-amber-50 text-amber-700 font-bold';
             } else if (val === 'ALL') {
               cellStyle = 'bg-emerald-50 text-emerald-700 font-bold text-xs tracking-wider';
+              printAssignClass = 'cell-assigned'; // PDF印刷時に薄く塗りつぶし
             } else if (val) {
               cellStyle = 'bg-indigo-50 text-indigo-700 font-bold';
+              printAssignClass = 'cell-assigned'; // PDF印刷時に薄く塗りつぶし
             }
 
             if (adminViewTab === 'final') {
-              td.className = `border border-slate-300 p-1 cursor-pointer transition hover:bg-indigo-50/50 ${cellStyle}`;
+              td.className = `border border-slate-300 p-1 cursor-pointer transition hover:bg-indigo-50/50 ${cellStyle} ${printAssignClass}`;
               td.onclick = () => openModal(s, d);
             } else {
-              td.className = `border border-slate-300 p-1 select-none ${cellStyle}`;
+              td.className = `border border-slate-300 p-1 select-none ${cellStyle} ${printAssignClass}`;
             }
 
             td.textContent = val || '-';
@@ -1189,7 +1219,7 @@
             <option value="ALL" ${curVal==='ALL'?'selected':''}>✨ ALL（何時でも可）</option>
             <option value="休み" ${curVal==='休み'?'selected':''}>✕ 休み希望</option>
           `;
-          ENTRY_TIMES.forEach(t => {
+          STAFF_ENTRY_TIMES.forEach(t => {
             opts += `<option value="${t}" ${curVal===t?'selected':''}>${t} 入り</option>`;
           });
           
