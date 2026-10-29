@@ -1,888 +1,910 @@
-<!DOCTYPE html>  
-<html lang="ja">  
-<head>  
-  <meta charset="UTF-8">  
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">  
-  <title>バイトシフト管理・希望提出アプリ</title>  
-  <script src="https://cdn.tailwindcss.com"></script>  
-  <style>  
-    .closed-pattern {  
-      background-color: #f1f5f9;  
-      background-image: repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 4px, #f1f5f9 4px, #f1f5f9 8px);  
-    }  
-    @media print {  
-      .no-print { display: none !important; }  
-      body { background: white !important; padding: 0 !important; }  
-      .print-area { border: none !important; box-shadow: none !important; }  
-      @page { size: A4 landscape; margin: 8mm; }  
-    }  
-  </style>  
-</head>  
-<body class="bg-slate-100 text-slate-800 p-3 md:p-6 text-sm min-h-screen">  
-  
-  <!-- 保存中・同期中インジケーター -->  
-  <div id="syncBadge" class="fixed bottom-4 right-4 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 opacity-0 transition-opacity z-50 pointer-events-none">  
-    <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>  
-    <span id="syncText">保存中...</span>  
-  </div>  
-  
-  <div class="max-w-7xl mx-auto space-y-4">  
-    <!-- ヘッダー -->  
-    <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 no-print">  
-      <div>  
-        <h1 class="font-bold text-lg text-slate-900" id="headerTitle">シフト希望提出</h1>  
-        <p class="text-xs text-slate-500" id="headerSub">17:00〜20:00入り・ALL / PIN個別認証・確定送信対応</p>  
-      </div>  
-  
-      <div class="flex items-center gap-2">  
-        <button id="btnOpenLogin" onclick="openAdminLoginModal()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5">  
-          🔒 管理者ログイン  
-        </button>  
-  
-        <div id="adminNavGroup" class="hidden flex items-center gap-2">  
-          <span class="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-md">管理者ログイン中</span>  
-          <button onclick="adminLogout()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">  
-            ログアウト  
-          </button>  
-        </div>  
-      </div>  
-    </header>  
-  
-    <!-- ========================================== -->  
-    <!-- 0. スタッフ初期ログイン画面（名前 ＆ PIN） -->  
-    <!-- ========================================== -->  
-    <div id="staffAuthGate" class="max-w-sm mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">  
-      <div class="text-center space-y-1">  
-        <div class="text-3xl">👤</div>  
-        <h2 class="font-bold text-base text-slate-900">スタッフログイン</h2>  
-        <p class="text-xs text-slate-400">お名前を選択し、暗証番号を入力してください</p>  
-      </div>  
-  
-      <div class="space-y-3">  
-        <div>  
-          <label class="block text-xs font-bold text-slate-600 mb-1">お名前</label>  
-          <select id="loginStaffSelect" class="w-full border border-slate-300 rounded-lg p-2.5 text-xs font-bold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"></select>  
-        </div>  
-  
-        <div>  
-          <label class="block text-xs font-bold text-slate-600 mb-1">暗証番号（PIN）</label>  
-          <input   
-            type="password"   
-            id="staffPinInput"   
-            placeholder="初期PIN: 0000"   
-            class="w-full border border-slate-300 rounded-lg p-2.5 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400"  
-            onkeydown="if(event.key === 'Enter') submitStaffLogin()"  
-          />  
-          <p class="text-[11px] text-slate-400 mt-1 text-center">※初めての方は「0000」を入力</p>  
-        </div>  
-  
-        <button onclick="submitStaffLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs shadow-sm transition">  
-          ログインして入力する  
-        </button>  
-      </div>  
-    </div>  
-  
-    <!-- ========================================== -->  
-    <!-- 1. スタッフシフト提出画面（ログイン後）     -->  
-    <!-- ========================================== -->  
-    <div id="staffView" class="hidden max-w-xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">  
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3">  
-        <div>  
-          <div class="flex items-center gap-2">  
-            <span class="text-xs font-bold text-slate-400">ログイン中:</span>  
-            <span class="text-base font-bold text-indigo-700" id="currentStaffBadge">佐藤</span>  
-          </div>  
-          <p class="text-xs text-slate-500 mt-0.5">17:00〜20:00の入り時間（または「ALL」「休み」）を選択</p>  
-        </div>  
-        <div class="flex items-center gap-2">  
-          <button onclick="changeStaffSelfPin()" class="text-[11px] text-indigo-600 hover:underline">🔑 PIN変更</button>  
-          <button onclick="staffLogout()" class="text-[11px] text-slate-500 hover:text-rose-600 border border-slate-200 px-2 py-1 rounded">切替(別の人)</button>  
-        </div>  
-      </div>  
-  
-      <!-- 日付ごとの選択リスト -->  
-      <div id="staffDaysList" class="space-y-2 max-h-[500px] overflow-y-auto pr-1"></div>  
-  
-      <!-- 送信・確定コントロールエリア -->  
-      <div class="pt-3 border-t border-slate-100 space-y-3">  
-        <div class="flex items-center justify-between">  
-          <span id="draftNotice" class="text-xs text-slate-400">選択後、下の送信ボタンを押して確定してください</span>  
-          <button onclick="copyLineFormat()" class="text-xs text-emerald-700 hover:underline flex items-center gap-1 font-bold">  
-            📋 LINE提出用テキストをコピー  
-          </button>  
-        </div>  
-  
-        <button   
-          id="btnSubmitShift"  
-          onclick="submitStaffShiftDraft()"   
-          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-sm shadow-md transition flex items-center justify-center gap-2"  
-        >  
-          <span>📤</span>  
-          <span>シフト希望を確定・送信する</span>  
-        </button>  
-      </div>  
-    </div>  
-  
-    <!-- ========================================== -->  
-    <!-- 2. 管理者画面                               -->  
-    <!-- ========================================== -->  
-    <div id="adminView" class="hidden space-y-4">  
-      <!-- スタッフ管理パネル -->  
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 no-print">  
-        <div class="flex flex-wrap items-center justify-between gap-3">  
-          <div class="flex items-center gap-2">  
-            <span class="font-bold text-xs text-slate-700">👥 スタッフ登録:</span>  
-            <input   
-              type="text"   
-              id="newStaffName"   
-              placeholder="名前を入力（例: 山田）"   
-              class="border border-slate-300 rounded px-2.5 py-1 text-xs w-44 focus:outline-none focus:ring-2 focus:ring-indigo-400"  
-              onkeydown="if(event.key === 'Enter') addStaff()"  
-            />  
-            <button onclick="addStaff()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1 rounded transition">  
-              ＋ 追加  
-            </button>  
-          </div>  
-          <div class="flex items-center gap-3">  
-            <span class="text-xs text-slate-400">登録中: <span id="staffCount" class="font-bold text-slate-700">0</span>名</span>  
-            <button onclick="changeAdminPasswordPrompt()" class="text-xs text-indigo-600 hover:underline">🔑 管理者PIN変更</button>  
-          </div>  
-        </div>  
-        <!-- 登録スタッフ一覧（PIN編集・削除） -->  
-        <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100" id="staffTagList"></div>  
-      </div>  
-  
-      <!-- 設定コントロールバー -->  
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 no-print">  
-        <div class="flex flex-wrap items-center justify-between gap-3">  
-          <div class="flex items-center gap-2">  
-            <span class="font-bold text-xs text-slate-700">年月:</span>  
-            <select id="selYear" onchange="changeDate()" class="border border-slate-300 rounded px-2 py-1 text-xs">  
-              <option value="2026">2026年</option>  
-              <option value="2027">2027年</option>  
-            </select>  
-            <select id="selMonth" onchange="changeDate()" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold"></select>  
-          </div>  
-  
-          <div class="flex items-center gap-1.5">  
-            <span class="font-bold text-xs text-slate-700">定休日(曜日):</span>  
-            <div id="weekdayButtons" class="flex gap-1"></div>  
-          </div>  
-  
-          <div class="flex items-center gap-2">  
-            <button onclick="autoAssign()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition">  
-              ✨ 自動シフト割当  
-            </button>  
-            <button onclick="window.print()" class="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition">  
-              🖨️ A4印刷 / PDF  
-            </button>  
-          </div>  
-        </div>  
-  
-        <div class="text-[11px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-200 flex items-center justify-between">  
-          <span>💡 <strong>日付の見出し（例: 5日(月)）をクリック</strong>すると、「通常 ⇄ 特別営業 ⇄ 臨時休業」を切替できます。</span>  
-          <button onclick="resetExceptions()" class="text-rose-600 hover:underline">個別例外をリセット</button>  
-        </div>  
-      </div>  
-  
-      <!-- シフト表 -->  
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 print-area space-y-6">  
-        <div>  
-          <div class="font-bold text-xs text-slate-600 mb-1 px-1">【上段】 1日 〜 15日</div>  
-          <div class="overflow-x-auto">  
-            <table class="w-full border-collapse border border-slate-300 text-center text-xs" id="tableTopHalf"></table>  
-          </div>  
-        </div>  
-  
-        <div>  
-          <div class="font-bold text-xs text-slate-600 mb-1 px-1">【下段】 16日 〜 月末</div>  
-          <div class="overflow-x-auto">  
-            <table class="w-full border-collapse border border-slate-300 text-center text-xs" id="tableBottomHalf"></table>  
-          </div>  
-        </div>  
-      </div>  
-    </div>  
-  </div>  
-  
-  <!-- 管理者ログインモーダル -->  
-  <div id="loginModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">  
-    <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-5 space-y-4">  
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2">  
-        <h3 class="font-bold text-slate-900 text-sm">🔒 管理者認証</h3>  
-        <button onclick="closeAdminLoginModal()" class="text-slate-400 hover:text-slate-700 text-sm">✕</button>  
-      </div>  
-      <div>  
-        <label class="block text-xs font-bold text-slate-600 mb-1">管理者暗証番号</label>  
-        <input type="password" id="adminPinInput" placeholder="管理者PIN" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400" onkeydown="if(event.key === 'Enter') submitAdminLogin()"/>  
-        <p class="text-[11px] text-slate-400 mt-1 text-center">初期PIN: 1234</p>  
-      </div>  
-      <div class="flex gap-2">  
-        <button onclick="closeAdminLoginModal()" class="flex-1 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg">キャンセル</button>  
-        <button onclick="submitAdminLogin()" class="flex-1 py-1.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg">ログイン</button>  
-      </div>  
-    </div>  
-  </div>  
-  
-  <!-- 入り時間選択モーダル（管理者用） -->  
-  <div id="editModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">  
-    <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-4 space-y-3">  
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2">  
-        <div id="modalTitle" class="font-bold text-xs text-slate-800"></div>  
-        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-sm">✕</button>  
-      </div>  
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>バイトシフト管理・希望提出アプリ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .closed-pattern {
+      background-color: #f1f5f9;
+      background-image: repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 4px, #f1f5f9 4px, #f1f5f9 8px);
+    }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; padding: 0 !important; }
+      .print-area { border: none !important; box-shadow: none !important; }
+      @page { size: A4 landscape; margin: 8mm; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 p-3 md:p-6 text-sm min-h-screen">
+
+  <!-- 保存中・同期中インジケーター -->
+  <div id="syncBadge" class="fixed bottom-4 right-4 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 opacity-0 transition-opacity z-50 pointer-events-none">
+    <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+    <span id="syncText">保存中...</span>
+  </div>
+
+  <div class="max-w-7xl mx-auto space-y-4">
+    <!-- ヘッダー -->
+    <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 no-print">
+      <div>
+        <h1 class="font-bold text-lg text-slate-900" id="headerTitle">シフト希望提出</h1>
+        <p class="text-xs text-slate-500" id="headerSub">17:00〜20:00入り・ALL / PIN個別認証・確定保存対応</p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnOpenLogin" onclick="openAdminLoginModal()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5">
+          🔒 管理者ログイン
+        </button>
+
+        <div id="adminNavGroup" class="hidden flex items-center gap-2">
+          <span class="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-md">管理者ログイン中</span>
+          <button onclick="adminLogout()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">
+            ログアウト
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ========================================== -->
+    <!-- 0. スタッフ初期ログイン画面（名前 ＆ PIN） -->
+    <!-- ========================================== -->
+    <div id="staffAuthGate" class="max-w-sm mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
+      <div class="text-center space-y-1">
+        <div class="text-3xl">👤</div>
+        <h2 class="font-bold text-base text-slate-900">スタッフログイン</h2>
+        <p class="text-xs text-slate-400">お名前を選択し、暗証番号を入力してください</p>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">お名前</label>
+          <select id="loginStaffSelect" class="w-full border border-slate-300 rounded-lg p-2.5 text-xs font-bold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"></select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">暗証番号（PIN）</label>
+          <input 
+            type="password" 
+            id="staffPinInput" 
+            placeholder="初期PIN: 0000" 
+            class="w-full border border-slate-300 rounded-lg p-2.5 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            onkeydown="if(event.key === 'Enter') submitStaffLogin()"
+          />
+          <p class="text-[11px] text-slate-400 mt-1 text-center">※初めての方は「0000」を入力</p>
+        </div>
+
+        <button onclick="submitStaffLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs shadow-sm transition">
+          ログインして入力する
+        </button>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 1. スタッフシフト提出画面（ログイン後）     -->
+    <!-- ========================================== -->
+    <div id="staffView" class="hidden max-w-xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-400">ログイン中:</span>
+            <span class="text-base font-bold text-indigo-700" id="currentStaffBadge">佐藤</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">17:00〜20:00の入り時間（または「ALL」「休み」）を選択</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="changeStaffSelfPin()" class="text-[11px] text-indigo-600 hover:underline">🔑 PIN変更</button>
+          <button onclick="staffLogout()" class="text-[11px] text-slate-500 hover:text-rose-600 border border-slate-200 px-2 py-1 rounded">切替(別の人)</button>
+        </div>
+      </div>
+
+      <!-- 日付ごとの選択リスト -->
+      <div id="staffDaysList" class="space-y-2 max-h-[500px] overflow-y-auto pr-1"></div>
+
+      <!-- 送信・確定コントロールエリア -->
+      <div class="pt-3 border-t border-slate-100 space-y-3">
+        <div class="flex items-center justify-between">
+          <span id="draftNotice" class="text-xs text-slate-400">選択後、下の送信ボタンを押して確定してください</span>
+          <button onclick="copyLineFormat()" class="text-xs text-emerald-700 hover:underline flex items-center gap-1 font-bold">
+            📋 LINE提出用テキストをコピー
+          </button>
+        </div>
+
+        <button 
+          id="btnSubmitShift"
+          onclick="submitStaffShiftDraft()" 
+          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-sm shadow-md transition flex items-center justify-center gap-2"
+        >
+          <span>📤</span>
+          <span>シフト希望を確定・送信する</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 2. 管理者画面                               -->
+    <!-- ========================================== -->
+    <div id="adminView" class="hidden space-y-4">
+      
+      <!-- スタッフ管理パネル -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 no-print">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-xs text-slate-700">👥 スタッフ登録:</span>
+            <input 
+              type="text" 
+              id="newStaffName" 
+              placeholder="名前を入力（例: 山田）" 
+              class="border border-slate-300 rounded px-2.5 py-1 text-xs w-44 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              onkeydown="if(event.key === 'Enter') addStaff()"
+            />
+            <button onclick="addStaff()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1 rounded transition">
+              ＋ 追加
+            </button>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400">登録中: <span id="staffCount" class="font-bold text-slate-700">0</span>名</span>
+            <button onclick="changeAdminPasswordPrompt()" class="text-xs text-indigo-600 hover:underline">🔑 管理者PIN変更</button>
+          </div>
+        </div>
+        <!-- 登録スタッフ一覧（PIN編集・削除） -->
+        <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100" id="staffTagList"></div>
+      </div>
+
+      <!-- 設定 ＆ 管理者確定保存コントロールバー -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 no-print">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-xs text-slate-700">年月:</span>
+            <select id="selYear" onchange="changeDate()" class="border border-slate-300 rounded px-2 py-1 text-xs">
+              <option value="2026">2026年</option>
+              <option value="2027">2027年</option>
+            </select>
+            <select id="selMonth" onchange="changeDate()" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold"></select>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <span class="font-bold text-xs text-slate-700">定休日(曜日):</span>
+            <div id="weekdayButtons" class="flex gap-1"></div>
+          </div>
+
+          <div>
+            <button onclick="window.print()" class="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition">
+              🖨️ A4印刷 / PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- 管理者変更確定ステータスバー -->
+        <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span id="adminDirtyStatus" class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded font-bold bg-slate-100 text-slate-500">
+              変更なし
+            </span>
+            <span class="text-[11px] text-slate-400">※セル編集・例外日設定を行った後は必ず確定保存を押してください</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="discardAdminChanges()" class="text-xs text-slate-500 hover:text-rose-600 px-2 py-1 transition">
+              元に戻す
+            </button>
+            <button 
+              id="btnAdminSave"
+              onclick="saveAdminChanges()" 
+              class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5"
+            >
+              <span>💾</span>
+              <span>変更内容を確定・保存する</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="text-[11px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-200 flex items-center justify-between">
+          <span>💡 <strong>日付の見出し（例: 5日(月)）をクリック</strong>すると、「通常 ⇄ 特別営業 ⇄ 臨時休業」を切替できます。</span>
+          <button onclick="resetExceptions()" class="text-rose-600 hover:underline">個別例外をリセット</button>
+        </div>
+      </div>
+
+      <!-- シフト表 -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 print-area space-y-6">
+        <div>
+          <div class="font-bold text-xs text-slate-600 mb-1 px-1 flex items-center justify-between">
+            <span>【上段】 1日 〜 15日</span>
+            <span class="text-[11px] text-slate-400 font-normal">セルクリックで調整（確定保存ボタンで反映）</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse border border-slate-300 text-center text-xs" id="tableTopHalf"></table>
+          </div>
+        </div>
+
+        <div>
+          <div class="font-bold text-xs text-slate-600 mb-1 px-1">【下段】 16日 〜 月末</div>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse border border-slate-300 text-center text-xs" id="tableBottomHalf"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理者ログインモーダル -->
+  <div id="loginModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <h3 class="font-bold text-slate-900 text-sm">🔒 管理者認証</h3>
+        <button onclick="closeAdminLoginModal()" class="text-slate-400 hover:text-slate-700 text-sm">✕</button>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">管理者暗証番号</label>
+        <input type="password" id="adminPinInput" placeholder="管理者PIN" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400" onkeydown="if(event.key === 'Enter') submitAdminLogin()"/>
+        <p class="text-[11px] text-slate-400 mt-1 text-center">初期PIN: 1234</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="closeAdminLoginModal()" class="flex-1 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg">キャンセル</button>
+        <button onclick="submitAdminLogin()" class="flex-1 py-1.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg">ログイン</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 入り時間選択モーダル（管理者用） -->
+  <div id="editModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div id="modalTitle" class="font-bold text-xs text-slate-800"></div>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-sm">✕</button>
+      </div>
+      
+      <button onclick="setShiftValue('ALL')" class="w-full py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition">
+        ✨ ALL
+      </button>
+
+      <div id="timeButtonsGrid" class="grid grid-cols-2 gap-1.5"></div>
+
+      <div class="flex gap-2 pt-2 border-t border-slate-100">
+        <button onclick="setShiftValue('休み')" class="flex-1 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200">休み</button>
+        <button onclick="setShiftValue('')" class="flex-1 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded">クリア</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // GAS Web App URL
+    // ==========================================
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzhZF_FFdjS7TDegj33pnMPkgPZUe414S9eMkxB09yG62sX3kmgPQ5ZU4pJm2VuUYHL5A/exec';
+
+    const ENTRY_TIMES = ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+    const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+    const HOLIDAYS = { '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日' };
+
+    let state = {
+      isAdmin: false,
+      adminPin: '1234',
+      loggedStaff: null,
+      year: 2026,
+      month: 11,
+      staff: ['佐藤', '鈴木', '高橋', '田中', '伊藤'],
+      staffPins: {},
+      closedWeekdays: [1, 2],
+      dayExceptions: {},
+      shifts: {},
+      editingTarget: null
+    };
+
+    let adminHasUnsavedChanges = false;
+    let staffDraftShifts = {};
+
+    // ==========================================
+    // クラウド同期
+    // ==========================================
+    async function loadCloudData() {
+      if (!GAS_API_URL) return;
+      showSyncIndicator('クラウドからデータ取得中...');
+      try {
+        const res = await fetch(GAS_API_URL);
+        const data = await res.json();
+        if (data && Object.keys(data).length > 0) {
+          state.staff = data.staff || state.staff;
+          state.staffPins = data.staffPins || {};
+          state.adminPin = data.adminPin || state.adminPin;
+          state.closedWeekdays = data.closedWeekdays || state.closedWeekdays;
+          state.dayExceptions = data.dayExceptions || state.dayExceptions;
+          state.shifts = data.shifts || state.shifts;
+        }
+      } catch (err) {
+        console.error('読み込み失敗:', err);
+      } finally {
+        hideSyncIndicator();
+        ensureStaffPins();
+        adminHasUnsavedChanges = false;
+        updateAdminDirtyStatus();
+        renderLoginStaffSelect();
+        renderStaffControls();
+        renderWeekdaysControl();
+        renderAll();
+      }
+    }
+
+    function ensureStaffPins() {
+      state.staff.forEach(s => {
+        if (!state.staffPins[s]) state.staffPins[s] = '0000';
+      });
+    }
+
+    async function executeSaveToCloud() {
+      if (!GAS_API_URL) return;
+      showSyncIndicator('クラウドに保存中...');
+      try {
+        const payload = {
+          staff: state.staff,
+          staffPins: state.staffPins,
+          adminPin: state.adminPin,
+          closedWeekdays: state.closedWeekdays,
+          dayExceptions: state.dayExceptions,
+          shifts: state.shifts
+        };
+        await fetch(GAS_API_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        showSyncIndicator('クラウドに保存完了', true);
+        return true;
+      } catch (err) {
+        console.error('保存失敗:', err);
+        showSyncIndicator('保存エラー', true);
+        return false;
+      }
+    }
+
+    function markAdminDirty() {
+      adminHasUnsavedChanges = true;
+      updateAdminDirtyStatus();
+    }
+
+    function updateAdminDirtyStatus() {
+      const el = document.getElementById('adminDirtyStatus');
+      const btn = document.getElementById('btnAdminSave');
+      if (adminHasUnsavedChanges) {
+        el.textContent = '⚠️ 未保存の変更があります';
+        el.className = 'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded font-bold bg-amber-100 text-amber-800 animate-pulse';
+        btn.className = 'bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow transition flex items-center gap-1.5 ring-2 ring-amber-400';
+      } else {
+        el.textContent = '✅ 保存済み';
+        el.className = 'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded font-bold bg-emerald-100 text-emerald-800';
+        btn.className = 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5';
+      }
+    }
+
+    async function saveAdminChanges() {
+      const ok = await executeSaveToCloud();
+      if (ok !== false) {
+        adminHasUnsavedChanges = false;
+        updateAdminDirtyStatus();
+        alert('管理者による変更内容をクラウドに保存しました！');
+      }
+    }
+
+    function discardAdminChanges() {
+      if (!adminHasUnsavedChanges || confirm('未保存の変更を破棄して最新データを再取得しますか？')) {
+        loadCloudData();
+      }
+    }
+
+    function showSyncIndicator(text, fade = false) {
+      const badge = document.getElementById('syncBadge');
+      document.getElementById('syncText').textContent = text;
+      badge.classList.remove('opacity-0');
+      if (fade) setTimeout(() => badge.classList.add('opacity-0'), 1500);
+    }
+    function hideSyncIndicator() {
+      document.getElementById('syncBadge').classList.add('opacity-0');
+    }
+
+    // ==========================================
+    // アプリ初期化
+    // ==========================================
+    function init() {
+      ensureStaffPins();
+
+      const selMonth = document.getElementById('selMonth');
+      for (let m = 1; m <= 12; m++) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = `${m}月`;
+        if (m === state.month) opt.selected = true;
+        selMonth.appendChild(opt);
+      }
+
+      const grid = document.getElementById('timeButtonsGrid');
+      ENTRY_TIMES.forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = "py-1.5 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-indigo-50 hover:text-indigo-600 transition";
+        btn.textContent = t;
+        btn.onclick = () => setShiftValue(t);
+        grid.appendChild(btn);
+      });
+
+      renderLoginStaffSelect();
+      renderStaffControls();
+      renderWeekdaysControl();
+      renderAll();
+      updateViewMode();
+      loadCloudData();
+    }
+
+    // ==========================================
+    // スタッフ個別ログイン・下書き管理
+    // ==========================================
+    function renderLoginStaffSelect() {
+      const sel = document.getElementById('loginStaffSelect');
+      sel.innerHTML = '';
+      state.staff.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        sel.appendChild(opt);
+      });
+    }
+
+    function submitStaffLogin() {
+      const staffName = document.getElementById('loginStaffSelect').value;
+      const pin = document.getElementById('staffPinInput').value.trim();
+      const currentPin = state.staffPins[staffName] || '0000';
+
+      if (pin === currentPin) {
+        state.loggedStaff = staffName;
+        document.getElementById('staffPinInput').value = '';
         
-      <button onclick="setShiftValue('ALL')" class="w-full py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition">  
-        ✨ ALL  
-      </button>  
-  
-      <div id="timeButtonsGrid" class="grid grid-cols-2 gap-1.5"></div>  
-  
-      <div class="flex gap-2 pt-2 border-t border-slate-100">  
-        <button onclick="setShiftValue('休み')" class="flex-1 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200">休み</button>  
-        <button onclick="setShiftValue('')" class="flex-1 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded">クリア</button>  
-      </div>  
-    </div>  
-  </div>  
-  
-  <script>  
-    // ==========================================  
-    // GAS Web App URL（組み込み済み）  
-    // ==========================================  
-    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzhZF_FFdjS7TDegj33pnMPkgPZUe414S9eMkxB09yG62sX3kmgPQ5ZU4pJm2VuUYHL5A/exec';  
-  
-    // 17:00〜20:00の30分刻み  
-    const ENTRY_TIMES = ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];  
-    const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];  
-    const HOLIDAYS = { '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日' };  
-  
-    let state = {  
-      isAdmin: false,  
-      adminPin: '1234',  
-      loggedStaff: null,  
-      year: 2026,  
-      month: 11,  
-      staff: ['佐藤', '鈴木', '高橋', '田中', '伊藤'],  
-      staffPins: {},  
-      closedWeekdays: [1, 2],  
-      dayExceptions: {},  
-      shifts: {},  
-      editingTarget: null  
-    };  
-  
-    // スタッフ入力の下書き保持用  
-    let staffDraftShifts = {};  
-  
-    // ==========================================  
-    // クラウド同期  
-    // ==========================================  
-    async function loadCloudData() {  
-      if (!GAS_API_URL) return;  
-      showSyncIndicator('クラウドからデータ取得中...');  
-      try {  
-        const res = await fetch(GAS_API_URL);  
-        const data = await res.json();  
-        if (data && Object.keys(data).length > 0) {  
-          state.staff = data.staff || state.staff;  
-          state.staffPins = data.staffPins || {};  
-          state.adminPin = data.adminPin || state.adminPin;  
-          state.closedWeekdays = data.closedWeekdays || state.closedWeekdays;  
-          state.dayExceptions = data.dayExceptions || state.dayExceptions;  
-          state.shifts = data.shifts || state.shifts;  
-        }  
-      } catch (err) {  
-        console.error('読み込み失敗:', err);  
-      } finally {  
-        hideSyncIndicator();  
-        ensureStaffPins();  
-        renderLoginStaffSelect();  
-        renderStaffControls();  
-        renderWeekdaysControl();  
-        renderAll();  
-      }  
-    }  
-  
-    function ensureStaffPins() {  
-      state.staff.forEach(s => {  
-        if (!state.staffPins[s]) state.staffPins[s] = '0000';  
-      });  
-    }  
-  
-    let saveTimer = null;  
-    function triggerAutoSave() {  
-      if (!GAS_API_URL) return;  
-      clearTimeout(saveTimer);  
-      showSyncIndicator('保存中...');  
-      saveTimer = setTimeout(async () => {  
-        try {  
-          const payload = {  
-            staff: state.staff,  
-            staffPins: state.staffPins,  
-            adminPin: state.adminPin,  
-            closedWeekdays: state.closedWeekdays,  
-            dayExceptions: state.dayExceptions,  
-            shifts: state.shifts  
-          };  
-          await fetch(GAS_API_URL, {  
-            method: 'POST',  
-            mode: 'no-cors',  
-            headers: { 'Content-Type': 'application/json' },  
-            body: JSON.stringify(payload)  
-          });  
-          showSyncIndicator('クラウドに保存完了', true);  
-        } catch (err) {  
-          console.error('保存失敗:', err);  
-          showSyncIndicator('保存エラー', true);  
-        }  
-      }, 300);  
-    }  
-  
-    function showSyncIndicator(text, fade = false) {  
-      const badge = document.getElementById('syncBadge');  
-      document.getElementById('syncText').textContent = text;  
-      badge.classList.remove('opacity-0');  
-      if (fade) setTimeout(() => badge.classList.add('opacity-0'), 1500);  
-    }  
-    function hideSyncIndicator() {  
-      document.getElementById('syncBadge').classList.add('opacity-0');  
-    }  
-  
-    // ==========================================  
-    // アプリ初期化  
-    // ==========================================  
-    function init() {  
-      ensureStaffPins();  
-  
-      const selMonth = document.getElementById('selMonth');  
-      for (let m = 1; m <= 12; m++) {  
-        const opt = document.createElement('option');  
-        opt.value = m;  
-        opt.textContent = `${m}月`;  
-        if (m === state.month) opt.selected = true;  
-        selMonth.appendChild(opt);  
-      }  
-  
-      // 管理者用の時間ボタン  
-      const grid = document.getElementById('timeButtonsGrid');  
-      ENTRY_TIMES.forEach(t => {  
-        const btn = document.createElement('button');  
-        btn.className = "py-1.5 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-indigo-50 hover:text-indigo-600 transition";  
-        btn.textContent = t;  
-        btn.onclick = () => setShiftValue(t);  
-        grid.appendChild(btn);  
-      });  
-  
-      renderLoginStaffSelect();  
-      renderStaffControls();  
-      renderWeekdaysControl();  
-      renderAll();  
-      updateViewMode();  
-      loadCloudData();  
-    }  
-  
-    // ==========================================  
-    // スタッフ個別ログイン・下書き管理  
-    // ==========================================  
-    function renderLoginStaffSelect() {  
-      const sel = document.getElementById('loginStaffSelect');  
-      sel.innerHTML = '';  
-      state.staff.forEach(s => {  
-        const opt = document.createElement('option');  
-        opt.value = s;  
-        opt.textContent = s;  
-        sel.appendChild(opt);  
-      });  
-    }  
-  
-    function submitStaffLogin() {  
-      const staffName = document.getElementById('loginStaffSelect').value;  
-      const pin = document.getElementById('staffPinInput').value.trim();  
-      const currentPin = state.staffPins[staffName] || '0000';  
-  
-      if (pin === currentPin) {  
-        state.loggedStaff = staffName;  
-        document.getElementById('staffPinInput').value = '';  
+        staffDraftShifts = {};
+        const days = getDays();
+        days.forEach(d => {
+          const key = `${staffName}_${d.dateKey}`;
+          if (state.shifts[key]) {
+            staffDraftShifts[d.dateKey] = state.shifts[key];
+          }
+        });
+
+        updateViewMode();
+      } else {
+        alert('暗証番号が正しくありません。\n（初期設定は「0000」です）');
+        document.getElementById('staffPinInput').value = '';
+        document.getElementById('staffPinInput').focus();
+      }
+    }
+
+    function staffLogout() {
+      state.loggedStaff = null;
+      staffDraftShifts = {};
+      updateViewMode();
+    }
+
+    function changeStaffSelfPin() {
+      if (!state.loggedStaff) return;
+      const current = prompt(`【${state.loggedStaff}さん】現在の暗証番号を入力してください:`);
+      const targetPin = state.staffPins[state.loggedStaff] || '0000';
+      if (current !== targetPin) return alert('暗証番号が一致しません。');
+
+      const next = prompt('新しい暗証番号（4桁の数字など）を入力してください:');
+      if (!next) return;
+      state.staffPins[state.loggedStaff] = next.trim();
+      executeSaveToCloud();
+      alert('暗証番号を変更しました！次回からこの番号でログインしてください。');
+    }
+
+    function updateStaffDraftShift(dateKey, val) {
+      if (!state.loggedStaff) return;
+      if (!val) {
+        delete staffDraftShifts[dateKey];
+      } else {
+        staffDraftShifts[dateKey] = val;
+      }
+      
+      const notice = document.getElementById('draftNotice');
+      notice.textContent = '⚠️ 未送信の変更があります。「シフト希望を確定・送信する」を押してください';
+      notice.className = 'text-xs text-amber-600 font-bold';
+    }
+
+    async function submitStaffShiftDraft() {
+      if (!state.loggedStaff) return;
+
+      const days = getDays();
+      days.forEach(d => {
+        const key = `${state.loggedStaff}_${d.dateKey}`;
+        if (staffDraftShifts[d.dateKey]) {
+          state.shifts[key] = staffDraftShifts[d.dateKey];
+        } else {
+          delete state.shifts[key];
+        }
+      });
+
+      await executeSaveToCloud();
+      renderAll();
+
+      const notice = document.getElementById('draftNotice');
+      notice.textContent = '✅ シフト希望を送信・保存しました！';
+      notice.className = 'text-xs text-emerald-600 font-bold';
+
+      alert(`【${state.loggedStaff}さん】\nシフト希望の送信が完了しました！`);
+    }
+
+    // ==========================================
+    // 管理者認証
+    // ==========================================
+    function openAdminLoginModal() {
+      document.getElementById('adminPinInput').value = '';
+      document.getElementById('loginModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('adminPinInput').focus(), 50);
+    }
+    function closeAdminLoginModal() {
+      document.getElementById('loginModal').classList.add('hidden');
+    }
+    function submitAdminLogin() {
+      const pin = document.getElementById('adminPinInput').value;
+      if (pin === state.adminPin) {
+        state.isAdmin = true;
+        closeAdminLoginModal();
+        updateViewMode();
+      } else {
+        alert('管理者暗証番号が違います。');
+        document.getElementById('adminPinInput').value = '';
+        document.getElementById('adminPinInput').focus();
+      }
+    }
+    function adminLogout() {
+      if (adminHasUnsavedChanges) {
+        if (!confirm('保存されていない管理者変更があります。ログアウトしますか？')) return;
+      }
+      state.isAdmin = false;
+      updateViewMode();
+    }
+    function changeAdminPasswordPrompt() {
+      const current = prompt('現在の管理者パスワードを入力してください:');
+      if (current !== state.adminPin) return alert('パスワードが違います。');
+      const next = prompt('新しい管理者パスワードを入力してください:');
+      if (!next) return;
+      state.adminPin = next.trim();
+      executeSaveToCloud();
+      alert('管理者パスワードを変更・保存しました！');
+    }
+
+    function updateViewMode() {
+      const gate = document.getElementById('staffAuthGate');
+      const staffView = document.getElementById('staffView');
+      const adminView = document.getElementById('adminView');
+      const btnOpenLogin = document.getElementById('btnOpenLogin');
+      const adminNavGroup = document.getElementById('adminNavGroup');
+
+      if (state.isAdmin) {
+        gate.classList.add('hidden');
+        staffView.classList.add('hidden');
+        adminView.classList.remove('hidden');
+        btnOpenLogin.classList.add('hidden');
+        adminNavGroup.classList.remove('hidden');
+        document.getElementById('headerTitle').textContent = 'シフト作成・管理（管理者）';
+        document.getElementById('headerSub').textContent = '変更後は「変更内容を確定・保存する」を押してください';
+      } else if (state.loggedStaff) {
+        gate.classList.add('hidden');
+        staffView.classList.remove('hidden');
+        adminView.classList.add('hidden');
+        btnOpenLogin.classList.remove('hidden');
+        adminNavGroup.classList.add('hidden');
+        document.getElementById('headerTitle').textContent = 'シフト希望提出';
+        document.getElementById('headerSub').textContent = '17:00〜20:00入り・ALL / 確定送信対応';
+        document.getElementById('currentStaffBadge').textContent = state.loggedStaff;
+        renderStaffList();
+      } else {
+        gate.classList.remove('hidden');
+        staffView.classList.add('hidden');
+        adminView.classList.add('hidden');
+        btnOpenLogin.classList.remove('hidden');
+        adminNavGroup.classList.add('hidden');
+        document.getElementById('headerTitle').textContent = 'スタッフログイン';
+        document.getElementById('headerSub').textContent = '名前を選択して暗証番号でログインしてください';
+      }
+    }
+
+    // ==========================================
+    // スタッフ管理（管理者用）
+    // ==========================================
+    function addStaff() {
+      const input = document.getElementById('newStaffName');
+      const name = input.value.trim();
+      if (!name) return;
+      if (state.staff.includes(name)) return alert('そのスタッフ名は既に登録されています。');
+      state.staff.push(name);
+      state.staffPins[name] = '0000';
+      input.value = '';
+      renderLoginStaffSelect();
+      renderStaffControls();
+      renderAll();
+      executeSaveToCloud();
+    }
+
+    function deleteStaff(name) {
+      if (!confirm(`スタッフ「${name}」を削除してもよろしいですか？`)) return;
+      state.staff = state.staff.filter(s => s !== name);
+      delete state.staffPins[name];
+      Object.keys(state.shifts).forEach(k => {
+        if (k.startsWith(`${name}_`)) delete state.shifts[k];
+      });
+      if (state.loggedStaff === name) state.loggedStaff = null;
+      renderLoginStaffSelect();
+      renderStaffControls();
+      renderAll();
+      executeSaveToCloud();
+    }
+
+    function adminResetPin(name) {
+      const cur = state.staffPins[name] || '0000';
+      const next = prompt(`【${name}さん】の暗証番号を再設定（現在のPIN: ${cur}）:`, cur);
+      if (next !== null && next.trim() !== '') {
+        state.staffPins[name] = next.trim();
+        renderStaffControls();
+        executeSaveToCloud();
+        alert(`${name}さんのPINを「${next.trim()}」に更新しました。`);
+      }
+    }
+
+    function renderStaffControls() {
+      document.getElementById('staffCount').textContent = state.staff.length;
+      const container = document.getElementById('staffTagList');
+      container.innerHTML = '';
+      state.staff.forEach(name => {
+        const pin = state.staffPins[name] || '0000';
+        const badge = document.createElement('div');
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-slate-50 text-slate-700 border border-slate-200";
+        badge.innerHTML = `
+          <span class="font-bold">${name}</span>
+          <button onclick="adminResetPin('${name}')" class="text-[10px] text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded font-mono border border-indigo-200" title="PINを変更・確認">PIN: ${pin}</button>
+          <button onclick="deleteStaff('${name}')" class="text-slate-400 hover:text-rose-600 transition ml-1" title="削除">✕</button>
+        `;
+        container.appendChild(badge);
+      });
+    }
+
+    // ==========================================
+    // カレンダー・テーブル描画
+    // ==========================================
+    function renderWeekdaysControl() {
+      const container = document.getElementById('weekdayButtons');
+      container.innerHTML = '';
+      WEEKDAYS.forEach((w, idx) => {
+        const btn = document.createElement('button');
+        const isClosed = state.closedWeekdays.includes(idx);
+        btn.className = `w-7 h-7 text-xs font-bold rounded border transition ${
+          isClosed ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-700 border-slate-300'
+        }`;
+        btn.textContent = w;
+        btn.onclick = () => {
+          if (state.closedWeekdays.includes(idx)) {
+            state.closedWeekdays = state.closedWeekdays.filter(d => d !== idx);
+          } else {
+            state.closedWeekdays.push(idx);
+          }
+          renderWeekdaysControl();
+          renderAll();
+          markAdminDirty();
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function getDays() {
+      const total = new Date(state.year, state.month, 0).getDate();
+      const list = [];
+      for (let d = 1; d <= total; d++) {
+        const dateKey = `${state.year}-${String(state.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dow = new Date(state.year, state.month - 1, d).getDay();
+        const isWeekdayClosed = state.closedWeekdays.includes(dow);
+        const exc = state.dayExceptions[dateKey];
+        const isClosed = exc === 'open' ? false : (exc === 'closed' ? true : isWeekdayClosed);
+        const isHoliday = !!HOLIDAYS[dateKey];
+        list.push({ day: d, dow, dowName: WEEKDAYS[dow], dateKey, isClosed, isWeekdayClosed, exc, isHoliday });
+      }
+      return list;
+    }
+
+    function renderAll() {
+      const days = getDays();
+      renderTable('tableTopHalf', days.slice(0, 15));
+      renderTable('tableBottomHalf', days.slice(15));
+      if (state.loggedStaff) renderStaffList();
+    }
+
+    function renderTable(tableId, days) {
+      const table = document.getElementById(tableId);
+      table.innerHTML = '';
+      if (state.staff.length === 0) {
+        table.innerHTML = '<tr><td class="p-4 text-slate-400">スタッフが登録されていません。</td></tr>';
+        return;
+      }
+
+      const thead = document.createElement('thead');
+      const headRow = document.createElement('tr');
+      headRow.className = "bg-slate-100";
+      
+      const thStaff = document.createElement('th');
+      thStaff.className = "border border-slate-300 p-2 w-24 text-slate-700 font-bold bg-slate-200";
+      thStaff.textContent = "スタッフ";
+      headRow.appendChild(thStaff);
+
+      days.forEach(d => {
+        const th = document.createElement('th');
+        let bg = 'bg-slate-50 text-slate-700';
+        if (d.isClosed) bg = 'bg-slate-200 text-slate-500';
+        else if (d.exc === 'open') bg = 'bg-emerald-100 text-emerald-800 font-bold';
+        else if (d.dow === 0 || d.isHoliday) bg = 'bg-rose-100 text-rose-800';
+        else if (d.dow === 6) bg = 'bg-blue-100 text-blue-800';
+
+        th.className = `border border-slate-300 p-1 min-w-[50px] cursor-pointer hover:opacity-80 select-none ${bg}`;
+        th.title = "クリックで個別例外（営業/休業）を切替";
+        th.onclick = () => toggleDayException(d.dateKey, d.isWeekdayClosed);
+
+        let badge = '';
+        if (d.exc === 'open') badge = '<div class="text-[9px] text-emerald-700 font-bold">特別営</div>';
+        else if (d.isClosed) badge = `<div class="text-[9px] text-slate-500">${d.exc === 'closed' ? '臨時休' : '定休'}</div>`;
+
+        th.innerHTML = `<div>${d.day}日</div><div class="text-[10px]">(${d.dowName})</div>${badge}`;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      state.staff.forEach(s => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.className = "border border-slate-300 p-1.5 font-bold bg-slate-50 whitespace-nowrap";
+        tdName.textContent = s;
+        tr.appendChild(tdName);
+
+        days.forEach(d => {
+          const td = document.createElement('td');
+          const val = state.shifts[`${s}_${d.dateKey}`] || '';
+
+          if (d.isClosed) {
+            td.className = "border border-slate-300 closed-pattern text-slate-400 select-none";
+            td.textContent = "-";
+          } else {
+            let cellStyle = 'hover:bg-indigo-50/50 text-slate-300';
+            if (val === '休み') {
+              cellStyle = 'bg-amber-50 text-amber-700 font-bold';
+            } else if (val === 'ALL') {
+              cellStyle = 'bg-emerald-50 text-emerald-700 font-bold text-xs tracking-wider';
+            } else if (val) {
+              cellStyle = 'bg-indigo-50 text-indigo-700 font-bold';
+            }
+
+            td.className = `border border-slate-300 p-1 cursor-pointer transition ${cellStyle}`;
+            td.textContent = val || '-';
+            td.onclick = () => openModal(s, d);
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+    }
+
+    function toggleDayException(dateKey, isWeekdayClosed) {
+      const cur = state.dayExceptions[dateKey];
+      if (!cur) state.dayExceptions[dateKey] = isWeekdayClosed ? 'open' : 'closed';
+      else delete state.dayExceptions[dateKey];
+      renderAll();
+      markAdminDirty();
+    }
+
+    function resetExceptions() {
+      state.dayExceptions = {};
+      renderAll();
+      markAdminDirty();
+    }
+
+    function openModal(staff, d) {
+      state.editingTarget = { staff, dateKey: d.dateKey };
+      document.getElementById('modalTitle').textContent = `${staff} さん : ${d.day}日(${d.dowName})`;
+      document.getElementById('editModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('editModal').classList.add('hidden');
+      state.editingTarget = null;
+    }
+
+    function setShiftValue(val) {
+      if (!state.editingTarget) return;
+      const key = `${state.editingTarget.staff}_${state.editingTarget.dateKey}`;
+      if (!val) delete state.shifts[key];
+      else state.shifts[key] = val;
+      closeModal();
+      renderAll();
+      markAdminDirty();
+    }
+
+    // ==========================================
+    // スタッフ提出画面描画
+    // ==========================================
+    function renderStaffList() {
+      if (!state.loggedStaff) return;
+      const list = document.getElementById('staffDaysList');
+      list.innerHTML = '';
+
+      const days = getDays();
+      days.forEach(d => {
+        const curVal = staffDraftShifts[d.dateKey] !== undefined 
+          ? staffDraftShifts[d.dateKey] 
+          : (state.shifts[`${state.loggedStaff}_${d.dateKey}`] || '');
+
+        const div = document.createElement('div');
+        div.className = `flex items-center justify-between p-2 rounded border text-xs ${
+          d.isClosed ? 'bg-slate-100 opacity-60 border-slate-200' : 'bg-white border-slate-200'
+        }`;
+
+        let label = `<div class="flex items-center gap-2">
+          <span class="font-bold w-6 text-right">${d.day}日</span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${d.dow === 0 || d.isHoliday ? 'bg-rose-100 text-rose-700' : d.dow === 6 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100'}">(${d.dowName})</span>
+          ${d.exc === 'open' ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">特別営</span>' : ''}
+          ${d.isClosed ? '<span class="text-[9px] bg-slate-200 text-slate-600 px-1 rounded">休み</span>' : ''}
+        </div>`;
+
+        let action = '';
+        if (d.isClosed) {
+          action = `<span class="text-slate-400">店休</span>`;
+        } else {
+          let opts = `
+            <option value="">未選択</option>
+            <option value="ALL" ${curVal==='ALL'?'selected':''}>✨ ALL（何時でも可）</option>
+            <option value="休み" ${curVal==='休み'?'selected':''}>✕ 休み希望</option>
+          `;
+          ENTRY_TIMES.forEach(t => {
+            opts += `<option value="${t}" ${curVal===t?'selected':''}>${t} 入り</option>`;
+          });
           
-        // ログイン時に現在の確定シフトを下書きにコピー  
-        staffDraftShifts = {};  
-        const days = getDays();  
-        days.forEach(d => {  
-          const key = `${staffName}_${d.dateKey}`;  
-          if (state.shifts[key]) {  
-            staffDraftShifts[d.dateKey] = state.shifts[key];  
-          }  
-        });  
-  
-        updateViewMode();  
-      } else {  
-        alert('暗証番号が正しくありません。\n（初期設定は「0000」です）');  
-        document.getElementById('staffPinInput').value = '';  
-        document.getElementById('staffPinInput').focus();  
-      }  
-    }  
-  
-    function staffLogout() {  
-      state.loggedStaff = null;  
-      staffDraftShifts = {};  
-      updateViewMode();  
-    }  
-  
-    function changeStaffSelfPin() {  
-      if (!state.loggedStaff) return;  
-      const current = prompt(`【${state.loggedStaff}さん】現在の暗証番号を入力してください:`);  
-      const targetPin = state.staffPins[state.loggedStaff] || '0000';  
-      if (current !== targetPin) return alert('暗証番号が一致しません。');  
-  
-      const next = prompt('新しい暗証番号（4桁の数字など）を入力してください:');  
-      if (!next) return;  
-      state.staffPins[state.loggedStaff] = next.trim();  
-      triggerAutoSave();  
-      alert('暗証番号を変更しました！次回からこの番号でログインしてください。');  
-    }  
-  
-    // スタッフ画面でプルダウンを変更したとき（下書きのみ更新）  
-    function updateStaffDraftShift(dateKey, val) {  
-      if (!state.loggedStaff) return;  
-      if (!val) {  
-        delete staffDraftShifts[dateKey];  
-      } else {  
-        staffDraftShifts[dateKey] = val;  
-      }  
-        
-      const notice = document.getElementById('draftNotice');  
-      notice.textContent = '⚠️ 未送信の変更があります。「シフト希望を確定・送信する」を押してください';  
-      notice.className = 'text-xs text-amber-600 font-bold';  
-    }  
-  
-    // 「確定・送信する」ボタンを押したとき（GASへ一括保存）  
-    function submitStaffShiftDraft() {  
-      if (!state.loggedStaff) return;  
-  
-      const days = getDays();  
-      days.forEach(d => {  
-        const key = `${state.loggedStaff}_${d.dateKey}`;  
-        if (staffDraftShifts[d.dateKey]) {  
-          state.shifts[key] = staffDraftShifts[d.dateKey];  
-        } else {  
-          delete state.shifts[key];  
-        }  
-      });  
-  
-      triggerAutoSave();  
-      renderAll();  
-  
-      const notice = document.getElementById('draftNotice');  
-      notice.textContent = '✅ シフト希望を送信・保存しました！';  
-      notice.className = 'text-xs text-emerald-600 font-bold';  
-  
-      alert(`【${state.loggedStaff}さん】\nシフト希望の送信が完了しました！`);  
-    }  
-  
-    // ==========================================  
-    // 管理者認証  
-    // ==========================================  
-    function openAdminLoginModal() {  
-      document.getElementById('adminPinInput').value = '';  
-      document.getElementById('loginModal').classList.remove('hidden');  
-      setTimeout(() => document.getElementById('adminPinInput').focus(), 50);  
-    }  
-    function closeAdminLoginModal() {  
-      document.getElementById('loginModal').classList.add('hidden');  
-    }  
-    function submitAdminLogin() {  
-      const pin = document.getElementById('adminPinInput').value;  
-      if (pin === state.adminPin) {  
-        state.isAdmin = true;  
-        closeAdminLoginModal();  
-        updateViewMode();  
-      } else {  
-        alert('管理者暗証番号が違います。');  
-        document.getElementById('adminPinInput').value = '';  
-        document.getElementById('adminPinInput').focus();  
-      }  
-    }  
-    function adminLogout() {  
-      state.isAdmin = false;  
-      updateViewMode();  
-    }  
-    function changeAdminPasswordPrompt() {  
-      const current = prompt('現在の管理者パスワードを入力してください:');  
-      if (current !== state.adminPin) return alert('パスワードが違います。');  
-      const next = prompt('新しい管理者パスワードを入力してください:');  
-      if (!next) return;  
-      state.adminPin = next.trim();  
-      triggerAutoSave();  
-      alert('管理者パスワードを変更・保存しました！');  
-    }  
-  
-    function updateViewMode() {  
-      const gate = document.getElementById('staffAuthGate');  
-      const staffView = document.getElementById('staffView');  
-      const adminView = document.getElementById('adminView');  
-      const btnOpenLogin = document.getElementById('btnOpenLogin');  
-      const adminNavGroup = document.getElementById('adminNavGroup');  
-  
-      if (state.isAdmin) {  
-        gate.classList.add('hidden');  
-        staffView.classList.add('hidden');  
-        adminView.classList.remove('hidden');  
-        btnOpenLogin.classList.add('hidden');  
-        adminNavGroup.classList.remove('hidden');  
-        document.getElementById('headerTitle').textContent = 'シフト作成・管理（管理者）';  
-        document.getElementById('headerSub').textContent = 'スタッフ管理 / 定休日・例外設定 / シフト確定＆印刷';  
-      } else if (state.loggedStaff) {  
-        gate.classList.add('hidden');  
-        staffView.classList.remove('hidden');  
-        adminView.classList.add('hidden');  
-        btnOpenLogin.classList.remove('hidden');  
-        adminNavGroup.classList.add('hidden');  
-        document.getElementById('headerTitle').textContent = 'シフト希望提出';  
-        document.getElementById('headerSub').textContent = '17:00〜20:00入り・ALL / 確定送信対応';  
-        document.getElementById('currentStaffBadge').textContent = state.loggedStaff;  
-        renderStaffList();  
-      } else {  
-        gate.classList.remove('hidden');  
-        staffView.classList.add('hidden');  
-        adminView.classList.add('hidden');  
-        btnOpenLogin.classList.remove('hidden');  
-        adminNavGroup.classList.add('hidden');  
-        document.getElementById('headerTitle').textContent = 'スタッフログイン';  
-        document.getElementById('headerSub').textContent = '名前を選択して暗証番号でログインしてください';  
-      }  
-    }  
-  
-    // ==========================================  
-    // スタッフ管理（管理者用）  
-    // ==========================================  
-    function addStaff() {  
-      const input = document.getElementById('newStaffName');  
-      const name = input.value.trim();  
-      if (!name) return;  
-      if (state.staff.includes(name)) return alert('そのスタッフ名は既に登録されています。');  
-      state.staff.push(name);  
-      state.staffPins[name] = '0000';  
-      input.value = '';  
-      renderLoginStaffSelect();  
-      renderStaffControls();  
-      renderAll();  
-      triggerAutoSave();  
-    }  
-  
-    function deleteStaff(name) {  
-      if (!confirm(`スタッフ「${name}」を削除してもよろしいですか？`)) return;  
-      state.staff = state.staff.filter(s => s !== name);  
-      delete state.staffPins[name];  
-      Object.keys(state.shifts).forEach(k => {  
-        if (k.startsWith(`${name}_`)) delete state.shifts[k];  
-      });  
-      if (state.loggedStaff === name) state.loggedStaff = null;  
-      renderLoginStaffSelect();  
-      renderStaffControls();  
-      renderAll();  
-      triggerAutoSave();  
-    }  
-  
-    function adminResetPin(name) {  
-      const cur = state.staffPins[name] || '0000';  
-      const next = prompt(`【${name}さん】の暗証番号を再設定（現在のPIN: ${cur}）:`, cur);  
-      if (next !== null && next.trim() !== '') {  
-        state.staffPins[name] = next.trim();  
-        renderStaffControls();  
-        triggerAutoSave();  
-        alert(`${name}さんのPINを「${next.trim()}」に更新しました。`);  
-      }  
-    }  
-  
-    function renderStaffControls() {  
-      document.getElementById('staffCount').textContent = state.staff.length;  
-      const container = document.getElementById('staffTagList');  
-      container.innerHTML = '';  
-      state.staff.forEach(name => {  
-        const pin = state.staffPins[name] || '0000';  
-        const badge = document.createElement('div');  
-        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-slate-50 text-slate-700 border border-slate-200";  
-        badge.innerHTML = `  
-          <span class="font-bold">${name}</span>  
-          <button onclick="adminResetPin('${name}')" class="text-[10px] text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded font-mono border border-indigo-200" title="PINを変更・確認">PIN: ${pin}</button>  
-          <button onclick="deleteStaff('${name}')" class="text-slate-400 hover:text-rose-600 transition ml-1" title="削除">✕</button>  
-        `;  
-        container.appendChild(badge);  
-      });  
-    }  
-  
-    // ==========================================  
-    // カレンダー・テーブル描画  
-    // ==========================================  
-    function renderWeekdaysControl() {  
-      const container = document.getElementById('weekdayButtons');  
-      container.innerHTML = '';  
-      WEEKDAYS.forEach((w, idx) => {  
-        const btn = document.createElement('button');  
-        const isClosed = state.closedWeekdays.includes(idx);  
-        btn.className = `w-7 h-7 text-xs font-bold rounded border transition ${  
-          isClosed ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-700 border-slate-300'  
-        }`;  
-        btn.textContent = w;  
-        btn.onclick = () => {  
-          if (state.closedWeekdays.includes(idx)) {  
-            state.closedWeekdays = state.closedWeekdays.filter(d => d !== idx);  
-          } else {  
-            state.closedWeekdays.push(idx);  
-          }  
-          renderWeekdaysControl();  
-          renderAll();  
-          triggerAutoSave();  
-        };  
-        container.appendChild(btn);  
-      });  
-    }  
-  
-    function getDays() {  
-      const total = new Date(state.year, state.month, 0).getDate();  
-      const list = [];  
-      for (let d = 1; d <= total; d++) {  
-        const dateKey = `${state.year}-${String(state.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;  
-        const dow = new Date(state.year, state.month - 1, d).getDay();  
-        const isWeekdayClosed = state.closedWeekdays.includes(dow);  
-        const exc = state.dayExceptions[dateKey];  
-        const isClosed = exc === 'open' ? false : (exc === 'closed' ? true : isWeekdayClosed);  
-        const isHoliday = !!HOLIDAYS[dateKey];  
-        list.push({ day: d, dow, dowName: WEEKDAYS[dow], dateKey, isClosed, isWeekdayClosed, exc, isHoliday });  
-      }  
-      return list;  
-    }  
-  
-    function renderAll() {  
-      const days = getDays();  
-      renderTable('tableTopHalf', days.slice(0, 15));  
-      renderTable('tableBottomHalf', days.slice(15));  
-      if (state.loggedStaff) renderStaffList();  
-    }  
-  
-    function renderTable(tableId, days) {  
-      const table = document.getElementById(tableId);  
-      table.innerHTML = '';  
-      if (state.staff.length === 0) {  
-        table.innerHTML = '<tr><td class="p-4 text-slate-400">スタッフが登録されていません。</td></tr>';  
-        return;  
-      }  
-  
-      const thead = document.createElement('thead');  
-      const headRow = document.createElement('tr');  
-      headRow.className = "bg-slate-100";  
-        
-      const thStaff = document.createElement('th');  
-      thStaff.className = "border border-slate-300 p-2 w-24 text-slate-700 font-bold bg-slate-200";  
-      thStaff.textContent = "スタッフ";  
-      headRow.appendChild(thStaff);  
-  
-      days.forEach(d => {  
-        const th = document.createElement('th');  
-        let bg = 'bg-slate-50 text-slate-700';  
-        if (d.isClosed) bg = 'bg-slate-200 text-slate-500';  
-        else if (d.exc === 'open') bg = 'bg-emerald-100 text-emerald-800 font-bold';  
-        else if (d.dow === 0 || d.isHoliday) bg = 'bg-rose-100 text-rose-800';  
-        else if (d.dow === 6) bg = 'bg-blue-100 text-blue-800';  
-  
-        th.className = `border border-slate-300 p-1 min-w-[50px] cursor-pointer hover:opacity-80 select-none ${bg}`;  
-        th.title = "クリックで個別例外（営業/休業）を切替";  
-        th.onclick = () => toggleDayException(d.dateKey, d.isWeekdayClosed);  
-  
-        let badge = '';  
-        if (d.exc === 'open') badge = '<div class="text-[9px] text-emerald-700 font-bold">特別営</div>';  
-        else if (d.isClosed) badge = `<div class="text-[9px] text-slate-500">${d.exc === 'closed' ? '臨時休' : '定休'}</div>`;  
-  
-        th.innerHTML = `<div>${d.day}日</div><div class="text-[10px]">(${d.dowName})</div>${badge}`;  
-        headRow.appendChild(th);  
-      });  
-      thead.appendChild(headRow);  
-      table.appendChild(thead);  
-  
-      const tbody = document.createElement('tbody');  
-      state.staff.forEach(s => {  
-        const tr = document.createElement('tr');  
-        const tdName = document.createElement('td');  
-        tdName.className = "border border-slate-300 p-1.5 font-bold bg-slate-50 whitespace-nowrap";  
-        tdName.textContent = s;  
-        tr.appendChild(tdName);  
-  
-        days.forEach(d => {  
-          const td = document.createElement('td');  
-          const val = state.shifts[`${s}_${d.dateKey}`] || '';  
-  
-          if (d.isClosed) {  
-            td.className = "border border-slate-300 closed-pattern text-slate-400 select-none";  
-            td.textContent = "-";  
-          } else {  
-            let cellStyle = 'hover:bg-indigo-50/50 text-slate-300';  
-            if (val === '休み') {  
-              cellStyle = 'bg-amber-50 text-amber-700 font-bold';  
-            } else if (val === 'ALL') {  
-              cellStyle = 'bg-emerald-50 text-emerald-700 font-bold text-xs tracking-wider';  
-            } else if (val) {  
-              cellStyle = 'bg-indigo-50 text-indigo-700 font-bold';  
-            }  
-  
-            td.className = `border border-slate-300 p-1 cursor-pointer transition ${cellStyle}`;  
-            td.textContent = val || '-';  
-            td.onclick = () => openModal(s, d);  
-          }  
-          tr.appendChild(td);  
-        });  
-        tbody.appendChild(tr);  
-      });  
-      table.appendChild(tbody);  
-    }  
-  
-    function toggleDayException(dateKey, isWeekdayClosed) {  
-      const cur = state.dayExceptions[dateKey];  
-      if (!cur) state.dayExceptions[dateKey] = isWeekdayClosed ? 'open' : 'closed';  
-      else delete state.dayExceptions[dateKey];  
-      renderAll();  
-      triggerAutoSave();  
-    }  
-  
-    function resetExceptions() {  
-      state.dayExceptions = {};  
-      renderAll();  
-      triggerAutoSave();  
-    }  
-  
-    function openModal(staff, d) {  
-      state.editingTarget = { staff, dateKey: d.dateKey };  
-      document.getElementById('modalTitle').textContent = `${staff} さん : ${d.day}日(${d.dowName})`;  
-      document.getElementById('editModal').classList.remove('hidden');  
-    }  
-  
-    function closeModal() {  
-      document.getElementById('editModal').classList.add('hidden');  
-      state.editingTarget = null;  
-    }  
-  
-    function setShiftValue(val) {  
-      if (!state.editingTarget) return;  
-      const key = `${state.editingTarget.staff}_${state.editingTarget.dateKey}`;  
-      if (!val) delete state.shifts[key];  
-      else state.shifts[key] = val;  
-      closeModal();  
-      renderAll();  
-      triggerAutoSave();  
-    }  
-  
-    function autoAssign() {  
-      if (state.staff.length === 0) return alert('スタッフが登録されていません。');  
-      const days = getDays();  
-      days.forEach(d => {  
-        if (d.isClosed) return;  
-        const count = (d.dow === 0 || d.dow === 6 || d.isHoliday) ? 3 : 2;  
-        let assigned = 0;  
-  
-        state.staff.forEach(s => {  
-          const key = `${s}_${d.dateKey}`;  
-          if (state.shifts[key] && state.shifts[key] !== '休み' && state.shifts[key] !== 'ALL') {  
-            assigned++;  
-          }  
-        });  
-  
-        const allStaff = state.staff.filter(s => state.shifts[`${s}_${d.dateKey}`] === 'ALL');  
-        allStaff.forEach(s => {  
-          if (assigned < count) {  
-            const key = `${s}_${d.dateKey}`;  
-            state.shifts[key] = assigned === 0 ? '17:00' : (assigned === 1 ? '17:30' : '18:00');  
-            assigned++;  
-          }  
-        });  
-  
-        const shuffled = [...state.staff].sort(() => 0.5 - Math.random());  
-        shuffled.forEach((s) => {  
-          const key = `${s}_${d.dateKey}`;  
-          if (assigned < count && !state.shifts[key]) {  
-            state.shifts[key] = assigned === 0 ? '17:00' : (assigned === 1 ? '17:30' : '18:00');  
-            assigned++;  
-          }  
-        });  
-      });  
-      renderAll();  
-      triggerAutoSave();  
-    }  
-  
-    // ==========================================  
-    // スタッフ提出画面描画  
-    // ==========================================  
-    function renderStaffList() {  
-      if (!state.loggedStaff) return;  
-      const list = document.getElementById('staffDaysList');  
-      list.innerHTML = '';  
-  
-      const days = getDays();  
-      days.forEach(d => {  
-        // 下書き（draft）を優先して表示  
-        const curVal = staffDraftShifts[d.dateKey] !== undefined   
-          ? staffDraftShifts[d.dateKey]   
-          : (state.shifts[`${state.loggedStaff}_${d.dateKey}`] || '');  
-  
-        const div = document.createElement('div');  
-        div.className = `flex items-center justify-between p-2 rounded border text-xs ${  
-          d.isClosed ? 'bg-slate-100 opacity-60 border-slate-200' : 'bg-white border-slate-200'  
-        }`;  
-  
-        let label = `<div class="flex items-center gap-2">  
-          <span class="font-bold w-6 text-right">${d.day}日</span>  
-          <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${d.dow === 0 || d.isHoliday ? 'bg-rose-100 text-rose-700' : d.dow === 6 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100'}">(${d.dowName})</span>  
-          ${d.exc === 'open' ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">特別営</span>' : ''}  
-          ${d.isClosed ? '<span class="text-[9px] bg-slate-200 text-slate-600 px-1 rounded">休み</span>' : ''}  
-        </div>`;  
-  
-        let action = '';  
-        if (d.isClosed) {  
-          action = `<span class="text-slate-400">店休</span>`;  
-        } else {  
-          let opts = `  
-            <option value="">未選択</option>  
-            <option value="ALL" ${curVal==='ALL'?'selected':''}>✨ ALL（何時でも可）</option>  
-            <option value="休み" ${curVal==='休み'?'selected':''}>✕ 休み希望</option>  
-          `;  
-          ENTRY_TIMES.forEach(t => {  
-            opts += `<option value="${t}" ${curVal===t?'selected':''}>${t} 入り</option>`;  
-          });  
-            
-          let selectBg = '';  
-          if (curVal === 'ALL') selectBg = 'bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold';  
-          else if (curVal === '休み') selectBg = 'bg-amber-50 text-amber-700 border-amber-300';  
-          else if (curVal) selectBg = 'bg-indigo-50 text-indigo-700 border-indigo-300';  
-  
-          action = `<select onchange="updateStaffDraftShift('${d.dateKey}', this.value)" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold ${selectBg}">${opts}</select>`;  
-        }  
-  
-        div.innerHTML = label + action;  
-        list.appendChild(div);  
-      });  
-    }  
-  
-    function copyLineFormat() {  
-      if (!state.loggedStaff) return;  
-      const days = getDays();  
-      let text = `【シフト希望】${state.loggedStaff} (${state.year}年${state.month}月)\n`;  
-      days.forEach(d => {  
-        if (d.isClosed) return;  
-        const val = staffDraftShifts[d.dateKey] !== undefined   
-          ? staffDraftShifts[d.dateKey]   
-          : state.shifts[`${state.loggedStaff}_${d.dateKey}`];  
-        if (val) {  
-          const displayVal = (val === '休み' || val === 'ALL') ? val : val + '入り';  
-          text += `${d.day}日(${d.dowName}): ${displayVal}\n`;  
-        }  
-      });  
-      navigator.clipboard.writeText(text);  
-      alert('LINE用テキストをコピーしました！トーク画面に貼り付けられます。');  
-    }  
-  
-    function changeDate() {  
-      state.year = Number(document.getElementById('selYear').value);  
-      state.month = Number(document.getElementById('selMonth').value);  
-      renderAll();  
-    }  
-  
-    window.onload = init;  
-  </script>  
-</body>  
-</html>  
+          let selectBg = '';
+          if (curVal === 'ALL') selectBg = 'bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold';
+          else if (curVal === '休み') selectBg = 'bg-amber-50 text-amber-700 border-amber-300';
+          else if (curVal) selectBg = 'bg-indigo-50 text-indigo-700 border-indigo-300';
+
+          action = `<select onchange="updateStaffDraftShift('${d.dateKey}', this.value)" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold ${selectBg}">${opts}</select>`;
+        }
+
+        div.innerHTML = label + action;
+        list.appendChild(div);
+      });
+    }
+
+    function copyLineFormat() {
+      if (!state.loggedStaff) return;
+      const days = getDays();
+      let text = `【シフト希望】${state.loggedStaff} (${state.year}年${state.month}月)\n`;
+      days.forEach(d => {
+        if (d.isClosed) return;
+        const val = staffDraftShifts[d.dateKey] !== undefined 
+          ? staffDraftShifts[d.dateKey] 
+          : state.shifts[`${state.loggedStaff}_${d.dateKey}`];
+        if (val) {
+          const displayVal = (val === '休み' || val === 'ALL') ? val : val + '入り';
+          text += `${d.day}日(${d.dowName}): ${displayVal}\n`;
+        }
+      });
+      navigator.clipboard.writeText(text);
+      alert('LINE用テキストをコピーしました！トーク画面に貼り付けられます。');
+    }
+
+    function changeDate() {
+      if (adminHasUnsavedChanges) {
+        if (!confirm('保存されていない変更があります。年月を切り替えますか？')) return;
+      }
+      state.year = Number(document.getElementById('selYear').value);
+      state.month = Number(document.getElementById('selMonth').value);
+      renderAll();
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
