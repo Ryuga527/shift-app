@@ -39,11 +39,12 @@
         break-inside: avoid !important;
       }
       th, td {
-        padding: 4px 2px !important;
-        font-size: 10px !important;
-        line-height: 1.2 !important;
+        padding: 3px 2px !important;
+        font-size: 9.5px !important;
+        line-height: 1.15 !important;
       }
-      /* 個別給与明細を印刷するときは全体を非表示にしてモーダル内容のみ印刷 */
+
+      /* 個別給与明細PDFの出力制御 */
       body.printing-payslip #adminView,
       body.printing-payslip #ownerView,
       body.printing-payslip #staffAuthGate,
@@ -62,6 +63,13 @@
         border: none !important;
         max-width: 100% !important;
         padding: 0 !important;
+        max-height: none !important;
+      }
+      body.printing-payslip input[type="time"] {
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        text-align: center !important;
       }
     }
   </style>
@@ -79,7 +87,7 @@
     <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 no-print">
       <div>
         <h1 class="font-bold text-lg text-slate-900" id="headerTitle">シフト＆勤怠・給与管理</h1>
-        <p class="text-xs text-slate-500" id="headerSub">15分単位給与計算 / 個別勤怠カレンダー修正 / 給与明細書対応</p>
+        <p class="text-xs text-slate-500" id="headerSub">実績打刻連動 / 15分丸め給与計算 / 個別給与明細対応</p>
       </div>
 
       <div class="flex items-center gap-2">
@@ -111,7 +119,7 @@
             <span class="text-xl">⏱️</span>
             <div>
               <h2 class="font-bold text-slate-900 text-sm">勤怠タイムカード</h2>
-              <p class="text-[11px] text-slate-400">本日の出退勤時間を打刻（15分単位で給与換算）</p>
+              <p class="text-[11px] text-slate-400">本日の出退勤時間を打刻（15分単位で給与計算）</p>
             </div>
           </div>
           <span id="liveClock" class="font-mono font-bold text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border">--:--:--</span>
@@ -365,7 +373,7 @@
             <span class="bg-amber-400 text-slate-900 font-extrabold text-[10px] px-2 py-0.5 rounded">OWNER ONLY</span>
             <h2 class="font-bold text-base">責任者画面（時給・勤怠修正・給与計算）</h2>
           </div>
-          <p class="text-xs text-indigo-200 mt-0.5">※名前をクリックすると「個別勤怠カレンダー」で修正・給与明細が出せます</p>
+          <p class="text-xs text-indigo-200 mt-0.5">※打刻・実績がある日のみ給料換算（未打刻は0h計算）。スタッフ名を押すと個別カレンダーが開きます</p>
         </div>
 
         <div class="flex items-center gap-2">
@@ -417,7 +425,7 @@
         <div class="border-b pb-2 flex items-baseline justify-between">
           <div>
             <h2 class="text-base font-extrabold text-slate-900 tracking-wide" id="payrollPrintTitle">【店舗名】2026年11月 店舗人件費・給与集計一覧</h2>
-            <p class="text-[11px] text-slate-500">※スタッフ名をクリックすると、その人の勤怠カレンダー修正・給与明細が出せます</p>
+            <p class="text-[11px] text-slate-500">※打刻・実績時間に基づいた実働集計。名前クリックで個別カレンダー修正・明細PDF出力</p>
           </div>
         </div>
 
@@ -431,8 +439,8 @@
             <div class="text-base font-bold text-slate-800 font-mono" id="summaryTotalHours">0h</div>
           </div>
           <div>
-            <div class="text-[11px] text-slate-500">深夜労働時間(22:00〜)</div>
-            <div class="text-base font-bold text-amber-700 font-mono" id="summaryNightHours">0h</div>
+            <div class="text-[11px] text-slate-500">総出勤日数</div>
+            <div class="text-base font-bold text-slate-800 font-mono" id="summaryTotalDays">0日</div>
           </div>
           <div>
             <div class="text-[11px] text-slate-500">特別手当総額</div>
@@ -444,9 +452,9 @@
           <table class="w-full border-collapse border border-slate-300 text-center text-xs">
             <thead class="bg-slate-100 font-bold text-slate-700">
               <tr>
-                <th class="border border-slate-300 p-2">氏名 (クリックで詳細)</th>
+                <th class="border border-slate-300 p-2">氏名 (クリックで詳細カレンダー)</th>
                 <th class="border border-slate-300 p-2">基本時給</th>
-                <th class="border border-slate-300 p-2">出勤日数</th>
+                <th class="border border-slate-300 p-2">実出勤日数</th>
                 <th class="border border-slate-300 p-2">総労働時間(15分換算)</th>
                 <th class="border border-slate-300 p-2">通常給与</th>
                 <th class="border border-slate-300 p-2">深夜手当(22時〜)</th>
@@ -462,28 +470,33 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- 4. スタッフ個別勤怠カレンダー ＆ 給与明細モーダル -->
+  <!-- 4. スタッフ個別勤怠カレンダー ＆ 給与明細モーダル（PDF対応） -->
   <!-- ========================================== -->
   <div id="staffDetailModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 md:p-4 z-50">
     <div id="staffDetailModalContent" class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] flex flex-col p-4 md:p-6 space-y-4">
       
       <!-- 明細ヘッダー -->
-      <div class="flex items-center justify-between border-b-2 border-slate-800 pb-3">
+      <div class="border-b-2 border-slate-800 pb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <span class="bg-indigo-100 text-indigo-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">個別給与支給明細書</span>
-          <h3 class="font-extrabold text-base md:text-lg text-slate-900 mt-1" id="staffDetailTitle">佐藤 さん 給与明細</h3>
+          <h3 class="font-extrabold text-base md:text-lg text-slate-900 mt-1" id="staffDetailTitle">佐藤 さん 給与支給明細書</h3>
+          <p class="text-[11px] text-slate-500" id="staffDetailShopSub">対象年月: 2026年11月</p>
         </div>
         <div class="no-print flex items-center gap-2">
           <button onclick="printIndividualPayslip()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1">
             <span>🖨️</span>
-            <span>この給与明細を印刷/PDF</span>
+            <span>この給与明細を印刷 / PDF</span>
           </button>
           <button onclick="closeStaffDetailModal()" class="text-slate-400 hover:text-slate-700 text-xl font-bold p-1">✕</button>
         </div>
       </div>
 
-      <!-- 計算式まとめカード -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+      <!-- 計算式まとめカード（出勤日数・詳細式） -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+        <div>
+          <span class="text-slate-400 block text-[10px]">当月実出勤日数</span>
+          <span class="font-mono font-extrabold text-base text-slate-800" id="detailWorkDaysCount">0 日</span>
+        </div>
         <div>
           <span class="text-slate-400 block text-[10px]">① 通常労働（基本時給×時間）</span>
           <span class="font-mono font-bold text-slate-800" id="detailFormulaRegular">-</span>
@@ -496,14 +509,14 @@
           <span class="text-slate-400 block text-[10px]">③ 特別手当</span>
           <span class="font-mono font-bold text-emerald-700" id="detailFormulaAllowance">-</span>
         </div>
-        <div class="bg-indigo-100/60 p-1.5 rounded-lg">
+        <div class="bg-indigo-100/70 p-2 rounded-lg">
           <span class="text-indigo-900 block text-[10px] font-bold">総支給額 (①+②+③)</span>
           <span class="font-mono font-extrabold text-base text-indigo-700" id="detailTotalPay">¥0</span>
         </div>
       </div>
 
-      <div class="no-print text-[11px] text-slate-500 bg-amber-50 p-2 rounded border border-amber-200">
-        💡 <strong>勤怠の修正</strong>: 入力欄の時間を変更すると、15分単位の給与換算がリアルタイムに再計算されて自動保存されます。
+      <div class="no-print text-[11px] text-slate-500 bg-amber-50 p-2 rounded border border-amber-200 flex items-center justify-between">
+        <span>💡 時間を修正すると15分丸め給与が自動再計算されます。打刻を削除して0円に戻す場合は「クリア」を押してください。</span>
       </div>
 
       <!-- 縦型カレンダー（日別出退勤一覧） -->
@@ -514,10 +527,11 @@
               <th class="border-b border-slate-300 p-2 w-20">日付</th>
               <th class="border-b border-slate-300 p-2 w-24">出勤時間</th>
               <th class="border-b border-slate-300 p-2 w-24">退勤時間</th>
-              <th class="border-b border-slate-300 p-2 w-24">給与換算時間<br><span class="text-[9px] font-normal text-slate-500">(15分丸め)</span></th>
+              <th class="border-b border-slate-300 p-2 w-28">給与換算時間<br><span class="text-[9px] font-normal text-slate-500">(15分丸め)</span></th>
               <th class="border-b border-slate-300 p-2 w-20">深夜時間<br><span class="text-[9px] font-normal text-slate-500">(22時〜)</span></th>
               <th class="border-b border-slate-300 p-2 w-20">特別手当</th>
               <th class="border-b border-slate-300 p-2 w-24">日給計</th>
+              <th class="border-b border-slate-300 p-2 w-16 no-print">操作</th>
             </tr>
           </thead>
           <tbody id="staffDetailTableBody"></tbody>
@@ -581,7 +595,7 @@
     </div>
   </div>
 
-  <!-- 責任者（オーナー）認証モーダル -->
+  <!-- 責任者認証モーダル -->
   <div id="ownerAuthModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-5 space-y-4">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -603,7 +617,7 @@
     </div>
   </div>
 
-  <!-- 入り時間選択モーダル（管理者用：15:00〜20:00） -->
+  <!-- 入り時間選択モーダル -->
   <div id="editModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -676,7 +690,7 @@
     }, 1000);
 
     // ==========================================
-    // 15分刻み丸め計算ロジック
+    // 15分丸め処理
     // ==========================================
     // 出勤時間：15分単位切り上げ（17:01 -> 17:15）
     function roundClockIn(min) {
@@ -691,7 +705,10 @@
       if (!str) return null;
       const parts = str.split(':');
       if (parts.length < 2) return null;
-      return Number(parts[0]) * 60 + Number(parts[1]);
+      const h = Number(parts[0]);
+      const m = Number(parts[1]);
+      if (isNaN(h) || isNaN(m)) return null;
+      return h * 60 + m;
     }
 
     function minutesToTimeString(min) {
@@ -835,7 +852,7 @@
     }
 
     // ==========================================
-    // 責任者機能 ＆ 個別勤怠カレンダー
+    // 責任者機能 ＆ 給与集計（実績ベースのみ）
     // ==========================================
     function openOwnerAuthModal() {
       document.getElementById('ownerPinInput').value = '';
@@ -881,7 +898,7 @@
         div.className = "flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs";
         div.innerHTML = `
           <button onclick="openStaffDetailModal('${s}')" class="font-bold text-indigo-700 hover:underline flex items-center gap-1">
-            <span>👤</span><span>${s}</span><span class="text-[10px] text-slate-400 font-normal">(勤怠修正)</span>
+            <span>👤</span><span>${s}</span><span class="text-[10px] text-slate-400 font-normal">(カレンダー・明細)</span>
           </button>
           <div class="flex items-center gap-1">
             <span class="text-slate-400">¥</span>
@@ -918,6 +935,7 @@
       renderSpecialAllowances();
       executeSaveToCloud();
       renderPayrollTable();
+      if (activeDetailStaff) renderStaffDetailContent();
     }
 
     function deleteSpecialAllowance(date) {
@@ -925,6 +943,7 @@
       renderSpecialAllowances();
       executeSaveToCloud();
       renderPayrollTable();
+      if (activeDetailStaff) renderStaffDetailContent();
     }
 
     function renderSpecialAllowances() {
@@ -940,7 +959,7 @@
     }
 
     // ==========================================
-    // 店舗人件費一覧テーブル
+    // 店舗人件費一覧テーブル（実績打刻のみで集計）
     // ==========================================
     function renderPayrollTable() {
       const name = state.shopName ? `【${state.shopName}】` : '';
@@ -951,7 +970,7 @@
 
       let totalShopCost = 0;
       let totalShopHours = 0;
-      let totalShopNightHours = 0;
+      let totalShopDays = 0;
       let totalShopAllowance = 0;
 
       const days = getDays();
@@ -961,7 +980,7 @@
 
         totalShopCost += stats.totalPay;
         totalShopHours += stats.totalHours;
-        totalShopNightHours += stats.nightHours;
+        totalShopDays += stats.workDaysCount;
         totalShopAllowance += stats.allowanceSum;
 
         const tr = document.createElement('tr');
@@ -973,7 +992,7 @@
             </button>
           </td>
           <td class="border border-slate-300 p-2 font-mono">¥${stats.baseWage.toLocaleString()}</td>
-          <td class="border border-slate-300 p-2 font-mono">${stats.workDaysCount}日</td>
+          <td class="border border-slate-300 p-2 font-mono font-bold">${stats.workDaysCount}日</td>
           <td class="border border-slate-300 p-2 font-mono font-bold">${stats.totalHours.toFixed(2)}h</td>
           <td class="border border-slate-300 p-2 font-mono">¥${stats.regularPay.toLocaleString()}</td>
           <td class="border border-slate-300 p-2 font-mono text-amber-700 font-bold">¥${stats.nightPay.toLocaleString()}<br><span class="text-[9px] font-normal">(${stats.nightHours.toFixed(2)}h)</span></td>
@@ -985,11 +1004,11 @@
 
       document.getElementById('summaryTotalCost').textContent = `¥${totalShopCost.toLocaleString()}`;
       document.getElementById('summaryTotalHours').textContent = `${totalShopHours.toFixed(1)}h`;
-      document.getElementById('summaryNightHours').textContent = `${totalShopNightHours.toFixed(1)}h`;
+      document.getElementById('summaryTotalDays').textContent = `${totalShopDays}日`;
       document.getElementById('summaryAllowanceTotal').textContent = `¥${totalShopAllowance.toLocaleString()}`;
     }
 
-    // 単一スタッフの月間集計
+    // 単一スタッフの月間集計（実績打刻のみ対象。予定シフトは換算しない）
     function calculateStaffMonthStats(staffName, days) {
       const baseWage = state.staffWages[staffName] || 1100;
       let workDaysCount = 0;
@@ -1001,38 +1020,30 @@
         if (d.isClosed) return;
         const key = `${staffName}_${d.dateKey}`;
         const punch = state.timePunches[key];
-        const shiftVal = state.shifts[key];
 
-        let inMin = null;
-        let outMin = null;
-
+        // 実績の打刻（in/out両方）がある場合のみ計算（予定シフトは無視）
         if (punch && punch.in && punch.out) {
-          inMin = timeStringToMinutes(punch.in);
-          outMin = timeStringToMinutes(punch.out);
-        } else if (shiftVal && shiftVal !== '休み') {
-          inMin = shiftVal === 'ALL' ? 17 * 60 : timeStringToMinutes(shiftVal);
-          outMin = 22 * 60; // 予定の場合は22:00まで
-        }
+          const inMin = timeStringToMinutes(punch.in);
+          const outMin = timeStringToMinutes(punch.out);
 
-        if (inMin !== null && outMin !== null && outMin > inMin) {
-          // 15分丸め処理
-          const rIn = roundClockIn(inMin);
-          const rOut = roundClockOut(outMin);
+          if (inMin !== null && outMin !== null && outMin > inMin) {
+            const rIn = roundClockIn(inMin);
+            const rOut = roundClockOut(outMin);
 
-          if (rOut > rIn) {
-            workDaysCount++;
-            const workM = rOut - rIn;
-            totalRoundedMinutes += workM;
+            if (rOut > rIn) {
+              workDaysCount++;
+              const workM = rOut - rIn;
+              totalRoundedMinutes += workM;
 
-            // 深夜時間（22:00 = 1320分 以降）
-            const nightLimit = 22 * 60;
-            if (rOut > nightLimit) {
-              const nM = rOut - Math.max(rIn, nightLimit);
-              nightRoundedMinutes += nM;
-            }
+              const nightLimit = 22 * 60;
+              if (rOut > nightLimit) {
+                const nM = rOut - Math.max(rIn, nightLimit);
+                nightRoundedMinutes += nM;
+              }
 
-            if (state.specialAllowances[d.dateKey]) {
-              allowanceSum += state.specialAllowances[d.dateKey];
+              if (state.specialAllowances[d.dateKey]) {
+                allowanceSum += state.specialAllowances[d.dateKey];
+              }
             }
           }
         }
@@ -1070,9 +1081,11 @@
       const stats = calculateStaffMonthStats(s, days);
       const shop = state.shopName ? `【${state.shopName}】` : '';
 
-      document.getElementById('staffDetailTitle').textContent = `${shop} ${state.year}年${state.month}月 給与支給明細書: ${s} さん`;
+      document.getElementById('staffDetailTitle').textContent = `${s} さん 給与支給明細書`;
+      document.getElementById('staffDetailShopSub').textContent = `${shop} ${state.year}年${state.month}月度 実働集計`;
 
-      // 計算式の表示
+      // サマリーカード
+      document.getElementById('detailWorkDaysCount').textContent = `${stats.workDaysCount} 日`;
       document.getElementById('detailFormulaRegular').innerHTML = `¥${stats.baseWage.toLocaleString()} × ${stats.regularHours.toFixed(2)}h = <span class="text-indigo-800">¥${stats.regularPay.toLocaleString()}</span>`;
       const nightHourly = Math.round(stats.baseWage * (state.nightRate / 100));
       document.getElementById('detailFormulaNight').innerHTML = `¥${nightHourly.toLocaleString()} (${state.nightRate}%) × ${stats.nightHours.toFixed(2)}h = <span class="text-amber-800">¥${stats.nightPay.toLocaleString()}</span>`;
@@ -1086,13 +1099,11 @@
       days.forEach(d => {
         const key = `${s}_${d.dateKey}`;
         const punch = state.timePunches[key] || { in: '', out: '' };
-        const shiftVal = state.shifts[key] || '';
         const allowance = state.specialAllowances[d.dateKey] || 0;
 
         let inVal = punch.in || '';
         let outVal = punch.out || '';
 
-        // 丸め計算結果の算出
         let inMin = timeStringToMinutes(inVal);
         let outMin = timeStringToMinutes(outVal);
         let calcStr = '-';
@@ -1126,10 +1137,10 @@
 
         tr.className = bg;
 
-        let dateCell = `<td class="p-2 border-r border-slate-200 font-bold">${d.day}日 (${d.dowName})</td>`;
+        let dateCell = `<td class="p-2 border-r border-slate-200 font-bold whitespace-nowrap">${d.day}日 (${d.dowName})</td>`;
 
         if (d.isClosed) {
-          tr.innerHTML = `${dateCell}<td colspan="6" class="p-2 text-slate-400">店休 / 定休日</td>`;
+          tr.innerHTML = `${dateCell}<td colspan="7" class="p-2 text-slate-400">店休 / 定休日</td>`;
         } else {
           tr.innerHTML = `
             ${dateCell}
@@ -1139,23 +1150,37 @@
             <td class="p-1 border-r border-slate-200">
               <input type="time" value="${outVal}" class="border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono font-bold" onchange="updateStaffDayPunch('${s}', '${d.dateKey}', 'out', this.value)"/>
             </td>
-            <td class="p-2 border-r border-slate-200 font-mono font-bold text-slate-700">${calcStr}</td>
-            <td class="p-2 border-r border-slate-200 font-mono font-bold text-amber-700">${nightStr}</td>
-            <td class="p-2 border-r border-slate-200 font-mono ${allowance>0?'text-emerald-700 font-bold':''}">${allowance>0?`+¥${allowance.toLocaleString()}`:'-'}</td>
-            <td class="p-2 font-mono font-extrabold text-indigo-700">${dayPayStr}</td>
+            <td class="p-2 border-r border-slate-200 font-mono font-bold text-slate-700 whitespace-nowrap">${calcStr}</td>
+            <td class="p-2 border-r border-slate-200 font-mono font-bold text-amber-700 whitespace-nowrap">${nightStr}</td>
+            <td class="p-2 border-r border-slate-200 font-mono whitespace-nowrap ${allowance>0?'text-emerald-700 font-bold':''}">${allowance>0?`+¥${allowance.toLocaleString()}`:'-'}</td>
+            <td class="p-2 font-mono font-extrabold text-indigo-700 whitespace-nowrap">${dayPayStr}</td>
+            <td class="p-1 no-print whitespace-nowrap">
+              <button onclick="clearStaffDayPunch('${s}', '${d.dateKey}')" class="text-[10px] text-slate-400 hover:text-rose-600 hover:bg-rose-50 px-1.5 py-0.5 rounded border border-slate-200 transition" title="この日の勤怠をクリア">
+                ✕ クリア
+              </button>
+            </td>
           `;
         }
         tbody.appendChild(tr);
       });
     }
 
-    // カレンダー上での打刻直接編集
+    // 勤怠修正
     async function updateStaffDayPunch(staffName, dateKey, type, val) {
       const key = `${staffName}_${dateKey}`;
       if (!state.timePunches[key]) {
         state.timePunches[key] = { in: null, out: null };
       }
       state.timePunches[key][type] = val || null;
+      await executeSaveToCloud();
+      renderStaffDetailContent();
+      renderPayrollTable();
+    }
+
+    // 勤怠のクリア（未打刻に戻す）
+    async function clearStaffDayPunch(staffName, dateKey) {
+      const key = `${staffName}_${dateKey}`;
+      delete state.timePunches[key];
       await executeSaveToCloud();
       renderStaffDetailContent();
       renderPayrollTable();
@@ -1195,7 +1220,7 @@
         btnOpenLogin.classList.add('hidden');
         adminNavGroup.classList.remove('hidden');
         document.getElementById('headerTitle').textContent = '責任者用ダッシュボード';
-        document.getElementById('headerSub').textContent = 'スタッフ別時給・深夜割増・手当・給与PDF出力';
+        document.getElementById('headerSub').textContent = 'スタッフ別時給・深夜割増・手当・個別給与明細出力';
       } else if (state.isAdmin) {
         gate.classList.add('hidden');
         staffView.classList.add('hidden');
