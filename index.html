@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>シフト管理アプリ</title>
+  <title>シフト＆勤怠・給与管理システム</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- LINE LIFF SDK -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     .closed-pattern {
       background-color: #f1f5f9;
       background-image: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 3px, #f1f5f9 3px, #f1f5f9 8px);
     }
-
     @page {
       size: A4 landscape;
       margin: 8mm 6mm;
@@ -25,9 +26,7 @@
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-      .no-print {
-        display: none !important;
-      }
+      .no-print { display: none !important; }
       .print-area {
         border: none !important;
         box-shadow: none !important;
@@ -42,29 +41,25 @@
         break-inside: avoid !important;
       }
       th, td {
-        padding: 2px 1px !important;
+        padding: 3px 2px !important;
         font-size: 10px !important;
         line-height: 1.2 !important;
       }
       .closed-pattern {
         background-color: #f1f5f9 !important;
         background-image: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 3px, #f1f5f9 3px, #f1f5f9 8px) !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
       }
       .cell-assigned {
         background-color: #f1f5f9 !important;
         color: #0f172a !important;
         font-weight: bold !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
       }
     }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 p-3 md:p-6 text-sm min-h-screen">
 
-  <!-- 保存中・同期中インジケーター -->
+  <!-- 保存インジケーター -->
   <div id="syncBadge" class="fixed bottom-4 right-4 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 opacity-0 transition-opacity z-50 pointer-events-none">
     <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
     <span id="syncText">保存中...</span>
@@ -74,8 +69,8 @@
     <!-- ヘッダー -->
     <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 no-print">
       <div>
-        <h1 class="font-bold text-lg text-slate-900" id="headerTitle">シフト管理</h1>
-        <p class="text-xs text-slate-500" id="headerSub">17:00〜20:00入り・ALL / 確定保存・公開対応</p>
+        <h1 class="font-bold text-lg text-slate-900" id="headerTitle">シフト＆勤怠・給与管理</h1>
+        <p class="text-xs text-slate-500" id="headerSub">LINE認証 / 勤怠打刻 / スタッフ別時給・深夜手当計算対応</p>
       </div>
 
       <div class="flex items-center gap-2">
@@ -84,7 +79,10 @@
         </button>
 
         <div id="adminNavGroup" class="hidden flex items-center gap-2">
-          <span class="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-md">管理者ログイン中</span>
+          <span class="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-md">管理者</span>
+          <button onclick="openOwnerAuthModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs">
+            💼 責任者画面(時給・給与)
+          </button>
           <button onclick="adminLogout()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">
             ログアウト
           </button>
@@ -93,38 +91,74 @@
     </header>
 
     <!-- ========================================== -->
-    <!-- 0. トップ画面（完成シフト閲覧 ＆ PINログイン） -->
+    <!-- 0. トップ画面（勤怠打刻 ＆ 完成シフト ＆ 提出） -->
     <!-- ========================================== -->
-    <div id="staffAuthGate" class="max-w-sm mx-auto space-y-4">
+    <div id="staffAuthGate" class="max-w-md mx-auto space-y-4">
       
-      <!-- 完成シフト閲覧カード -->
-      <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-5 text-white space-y-3">
-        <div class="flex items-center justify-between">
-          <span class="bg-white/20 backdrop-blur-xs text-[10px] font-extrabold px-2 py-0.5 rounded-full">確定シフト</span>
-          <span id="publicStatusText" class="text-[11px] font-medium text-emerald-100"></span>
-        </div>
-        <div>
-          <h3 class="font-bold text-base" id="topCardShopTitle">完成シフト表</h3>
-          <p class="text-xs text-emerald-100 mt-0.5">最新の確定シフトを誰でも確認できます</p>
-        </div>
-        <button onclick="openPublicShiftModal()" class="w-full bg-white text-emerald-800 hover:bg-emerald-50 font-bold py-2.5 rounded-xl text-xs transition shadow-sm flex items-center justify-center gap-1.5">
-          <span>👀</span>
-          <span>完成シフト表を見る</span>
-        </button>
-      </div>
-
-      <!-- スタッフ希望提出ログインカード -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
-        <div class="text-center space-y-1">
-          <div class="text-3xl">👤</div>
-          <h2 class="font-bold text-base text-slate-900">シフト希望を提出する</h2>
-          <p class="text-xs text-slate-400">お名前を選び、暗証番号を入力してください</p>
+      <!-- 勤怠タイムレコーダーカード -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">⏱️</span>
+            <div>
+              <h2 class="font-bold text-slate-900 text-sm">勤怠タイムカード</h2>
+              <p class="text-[11px] text-slate-400">本日の出退勤時間を打刻して給与に反映</p>
+            </div>
+          </div>
+          <span id="liveClock" class="font-mono font-bold text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border">--:--:--</span>
         </div>
 
         <div class="space-y-3">
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">お名前</label>
-            <select id="loginStaffSelect" class="w-full border border-slate-300 rounded-lg p-2.5 text-xs font-bold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            <select id="punchStaffSelect" onchange="updateTodayPunchDisplay()" class="w-full border border-slate-300 rounded-lg p-2 text-xs font-bold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"></select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="recordPunch('clockIn')" class="bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold py-3 rounded-xl text-xs transition shadow-sm flex flex-col items-center justify-center gap-0.5">
+              <span class="text-base">🟢</span>
+              <span>出勤打刻</span>
+            </button>
+            <button onclick="recordPunch('clockOut')" class="bg-rose-600 hover:bg-rose-700 active:scale-98 text-white font-bold py-3 rounded-xl text-xs transition shadow-sm flex flex-col items-center justify-center gap-0.5">
+              <span class="text-base">🔴</span>
+              <span>退勤打刻</span>
+            </button>
+          </div>
+
+          <div id="todayPunchStatus" class="text-[11px] text-center text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 font-mono">
+            本日: 未打刻
+          </div>
+        </div>
+      </div>
+
+      <!-- 完成シフト閲覧カード -->
+      <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-4 text-white space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="bg-white/20 backdrop-blur-xs text-[10px] font-extrabold px-2 py-0.5 rounded-full">確定シフト</span>
+          <span id="publicStatusText" class="text-[11px] font-medium text-emerald-100"></span>
+        </div>
+        <div>
+          <h3 class="font-bold text-sm" id="topCardShopTitle">完成シフト表</h3>
+          <p class="text-[11px] text-emerald-100">今月の確定シフトを誰でも確認できます</p>
+        </div>
+        <button onclick="openPublicShiftModal()" class="w-full bg-white text-emerald-800 hover:bg-emerald-50 font-bold py-2 rounded-xl text-xs transition shadow-sm flex items-center justify-center gap-1.5">
+          <span>👀</span>
+          <span>完成シフト表を見る</span>
+        </button>
+      </div>
+
+      <!-- シフト希望提出ログインカード -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+        <div class="text-center space-y-1">
+          <div class="text-2xl">📝</div>
+          <h2 class="font-bold text-sm text-slate-900">シフト希望を提出する</h2>
+          <p class="text-[11px] text-slate-400">暗証番号（初期: 0000）でログイン</p>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">お名前</label>
+            <select id="loginStaffSelect" class="w-full border border-slate-300 rounded-lg p-2 text-xs font-bold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400">
               <option value="">読み込み中...</option>
             </select>
           </div>
@@ -134,11 +168,10 @@
             <input 
               type="password" 
               id="staffPinInput" 
-              placeholder="初期PIN: 0000" 
-              class="w-full border border-slate-300 rounded-lg p-2.5 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              placeholder="0000" 
+              class="w-full border border-slate-300 rounded-lg p-2 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400"
               onkeydown="if(event.key === 'Enter') submitStaffLogin()"
             />
-            <p class="text-[11px] text-slate-400 mt-1 text-center">※初めての方は「0000」を入力</p>
           </div>
 
           <button onclick="submitStaffLogin()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg text-xs shadow-sm transition">
@@ -188,11 +221,9 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- 2. 管理者画面                               -->
+    <!-- 2. 管理者画面（シフト編集・公開）          -->
     <!-- ========================================== -->
     <div id="adminView" class="hidden space-y-4">
-      
-      <!-- 店舗名・スタッフ管理パネル -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 no-print">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div class="flex items-center gap-2">
@@ -200,11 +231,10 @@
             <input 
               type="text" 
               id="shopNameInput" 
-              placeholder="店舗名を入力（例: カフェ〇〇）" 
+              placeholder="店舗名を入力" 
               class="border border-slate-300 rounded px-2.5 py-1 text-xs w-56 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400"
               onchange="updateShopName(this.value)"
             />
-            <span class="text-[11px] text-slate-400">※PDFの見出し・ファイル名に反映</span>
           </div>
 
           <div class="flex items-center gap-3">
@@ -219,7 +249,7 @@
           <input 
             type="text" 
             id="newStaffName" 
-            placeholder="名前を入力（例: 山田）" 
+            placeholder="名前を入力" 
             class="border border-slate-300 rounded px-2.5 py-1 text-xs w-44 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             onkeydown="if(event.key === 'Enter') addStaff()"
           />
@@ -231,7 +261,7 @@
         <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100" id="staffTagList"></div>
       </div>
 
-      <!-- 設定 ＆ 管理者確定保存コントロールバー -->
+      <!-- 設定 ＆ 確定保存コントロールバー -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 no-print">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex items-center gap-2">
@@ -248,14 +278,8 @@
             <div id="weekdayButtons" class="flex gap-1"></div>
           </div>
 
-          <!-- シフト完成・公開トグルボタン -->
           <div class="flex items-center gap-2">
-            <button 
-              id="btnPublishToggle" 
-              onclick="togglePublishShift()" 
-              class="px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5"
-            ></button>
-
+            <button id="btnPublishToggle" onclick="togglePublishShift()" class="px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5"></button>
             <button onclick="printPdfWithCustomName()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5">
               <span>🖨️</span>
               <span>A4印刷 / PDF出力</span>
@@ -263,24 +287,16 @@
           </div>
         </div>
 
-        <!-- 管理者変更確定ステータスバー -->
+        <!-- 保存ステータスバー -->
         <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2">
-            <span id="adminDirtyStatus" class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded font-bold bg-slate-100 text-slate-500">
-              変更なし
-            </span>
-            <span class="text-[11px] text-slate-400">※セル編集・例外設定後は「変更内容を確定・保存する」を押してください</span>
+            <span id="adminDirtyStatus" class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded font-bold bg-slate-100 text-slate-500">変更なし</span>
+            <span class="text-[11px] text-slate-400">※セル編集・例外設定後は必ず確定保存を押してください</span>
           </div>
 
           <div class="flex items-center gap-2">
-            <button onclick="discardAdminChanges()" class="text-xs text-slate-500 hover:text-rose-600 px-2 py-1 transition">
-              元に戻す
-            </button>
-            <button 
-              id="btnAdminSave"
-              onclick="saveAdminChanges()" 
-              class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5"
-            >
+            <button onclick="discardAdminChanges()" class="text-xs text-slate-500 hover:text-rose-600 px-2 py-1 transition">元に戻す</button>
+            <button id="btnAdminSave" onclick="saveAdminChanges()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5">
               <span>💾</span>
               <span>変更内容を確定・保存する</span>
             </button>
@@ -295,27 +311,18 @@
 
       <!-- シフト表（印刷対象エリア） -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 print-area space-y-2 md:space-y-3">
-        
         <div class="border-b-2 border-slate-800 pb-1.5 flex items-baseline justify-between">
           <div class="flex items-center gap-3">
-            <h2 class="text-sm md:text-base font-extrabold text-slate-900 tracking-wide" id="printHeadingTitle">
-              【店舗名】2026年11月 シフト表
-            </h2>
+            <h2 class="text-sm md:text-base font-extrabold text-slate-900 tracking-wide" id="printHeadingTitle">【店舗名】2026年11月 シフト表</h2>
             <span id="adminPublishedBadge" class="no-print text-xs font-bold px-2 py-0.5 rounded"></span>
           </div>
           
           <div class="no-print flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
-            <button id="tabFinal" onclick="switchAdminTab('final')" class="px-3 py-1 rounded font-bold bg-white text-indigo-700 shadow-xs">
-              確定シフト
-            </button>
-            <button id="tabOriginal" onclick="switchAdminTab('original')" class="px-3 py-1 rounded font-bold text-slate-500 hover:text-slate-800">
-              📋 スタッフ元の希望
-            </button>
+            <button id="tabFinal" onclick="switchAdminTab('final')" class="px-3 py-1 rounded font-bold bg-white text-indigo-700 shadow-xs">確定シフト</button>
+            <button id="tabOriginal" onclick="switchAdminTab('original')" class="px-3 py-1 rounded font-bold text-slate-500 hover:text-slate-800">📋 スタッフ元の希望</button>
           </div>
 
-          <div class="text-[10px] text-slate-400">
-            作成日: <span id="printGeneratedDate"></span>
-          </div>
+          <div class="text-[10px] text-slate-400">作成日: <span id="printGeneratedDate"></span></div>
         </div>
 
         <div id="originalNotice" class="hidden no-print p-2.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold">
@@ -340,9 +347,119 @@
         </div>
       </div>
     </div>
+
+    <!-- ========================================== -->
+    <!-- 3. 責任者画面（時給設定・特別手当・給与PDF） -->
+    <!-- ========================================== -->
+    <div id="ownerView" class="hidden space-y-4">
+      <div class="bg-indigo-900 text-white rounded-xl shadow-sm p-4 flex flex-wrap items-center justify-between gap-3 no-print">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="bg-amber-400 text-slate-900 font-extrabold text-[10px] px-2 py-0.5 rounded">OWNER ONLY</span>
+            <h2 class="font-bold text-base">責任者画面（時給・給与計算）</h2>
+          </div>
+          <p class="text-xs text-indigo-200 mt-0.5">スタッフ個別時給 / 深夜手当 / 特別手当日設定 / 給与明細PDF出力</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="printPayrollPdf()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1">
+            <span>🖨️</span>
+            <span>給与明細PDFを出力</span>
+          </button>
+          <button onclick="changeOwnerPasswordPrompt()" class="bg-indigo-800 hover:bg-indigo-700 text-indigo-100 text-xs px-2.5 py-1.5 rounded-lg transition">
+            🔑 責任者PIN変更
+          </button>
+          <button onclick="closeOwnerView()" class="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition">
+            管理者画面へ戻る
+          </button>
+        </div>
+      </div>
+
+      <!-- 基本時給 ＆ 深夜割増設定パネル -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
+        <div class="md:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+          <h3 class="font-bold text-xs text-slate-700 border-b pb-2 flex items-center justify-between">
+            <span>💵 スタッフ基本時給設定（円）</span>
+            <span class="text-[11px] text-slate-400 font-normal">変更すると自動保存されます</span>
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="staffWageList"></div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+          <h3 class="font-bold text-xs text-slate-700 border-b pb-2">🌙 深夜割増・特別手当</h3>
+          
+          <div class="space-y-2">
+            <label class="block text-xs font-bold text-slate-600">深夜割増率（22:00以降）</label>
+            <div class="flex items-center gap-2">
+              <input type="number" id="nightRateInput" step="5" min="100" max="200" class="border border-slate-300 rounded px-2.5 py-1 text-xs font-bold w-24 text-right" onchange="updateNightRate(this.value)"/>
+              <span class="text-xs text-slate-500">%（標準: 125%）</span>
+            </div>
+            <p class="text-[11px] text-slate-400">※22:00〜翌5:00は25%以上の割増が必須です。</p>
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 space-y-2">
+            <label class="block text-xs font-bold text-slate-600">特定日の特別手当追加</label>
+            <div class="flex items-center gap-1.5">
+              <input type="date" id="allowanceDateInput" class="border border-slate-300 rounded px-2 py-1 text-xs"/>
+              <input type="number" id="allowanceAmountInput" placeholder="金額(円)" class="border border-slate-300 rounded px-2 py-1 text-xs w-20 text-right"/>
+              <button onclick="addSpecialAllowance()" class="bg-slate-800 text-white text-xs font-bold px-2.5 py-1 rounded">追加</button>
+            </div>
+            <div id="allowanceTagList" class="flex flex-wrap gap-1.5 pt-1"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 給与計算集計表（印刷・PDF対象エリア） -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 print-area space-y-4" id="payrollPrintArea">
+        <div class="border-b-2 border-slate-800 pb-2 flex items-baseline justify-between">
+          <div>
+            <h2 class="text-base font-extrabold text-slate-900 tracking-wide" id="payrollPrintTitle">【店舗名】2026年11月 給与支給明細・人件費一覧</h2>
+            <p class="text-[11px] text-slate-500">勤怠打刻ログおよび確定シフト・時給設定に基づく算出明細</p>
+          </div>
+          <div class="text-[10px] text-slate-400">集計日: <span id="payrollGeneratedDate"></span></div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+          <div>
+            <div class="text-[11px] text-slate-500">店舗総人件費</div>
+            <div class="text-base font-extrabold text-indigo-700 font-mono" id="summaryTotalCost">¥0</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500">総実働時間</div>
+            <div class="text-base font-bold text-slate-800 font-mono" id="summaryTotalHours">0h</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500">深夜労働時間(22:00〜)</div>
+            <div class="text-base font-bold text-amber-700 font-mono" id="summaryNightHours">0h</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500">特別手当総額</div>
+            <div class="text-base font-bold text-emerald-700 font-mono" id="summaryAllowanceTotal">¥0</div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse border border-slate-300 text-center text-xs">
+            <thead class="bg-slate-100 font-bold text-slate-700">
+              <tr>
+                <th class="border border-slate-300 p-2">氏名</th>
+                <th class="border border-slate-300 p-2">基本時給</th>
+                <th class="border border-slate-300 p-2">出勤日数</th>
+                <th class="border border-slate-300 p-2">総労働時間</th>
+                <th class="border border-slate-300 p-2">通常給与</th>
+                <th class="border border-slate-300 p-2">深夜手当(22時〜)</th>
+                <th class="border border-slate-300 p-2">特別手当</th>
+                <th class="border border-slate-300 p-2 bg-indigo-50 text-indigo-900">当月総支給額</th>
+              </tr>
+            </thead>
+            <tbody id="payrollTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- 完成シフト閲覧モーダル（全画面表） -->
+  <!-- 完成シフト閲覧モーダル -->
   <div id="publicShiftModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 z-50">
     <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col p-4 md:p-6 space-y-4">
       <div class="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -393,6 +510,28 @@
     </div>
   </div>
 
+  <!-- 責任者（オーナー）認証モーダル -->
+  <div id="ownerAuthModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div class="flex items-center gap-1.5">
+          <span class="text-base">💼</span>
+          <h3 class="font-bold text-slate-900 text-sm">責任者専用認証</h3>
+        </div>
+        <button onclick="closeOwnerAuthModal()" class="text-slate-400 hover:text-slate-700 text-sm">✕</button>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">責任者暗証番号（時給・給与）</label>
+        <input type="password" id="ownerPinInput" placeholder="責任者PIN" class="w-full border border-indigo-300 rounded-lg px-3 py-2 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500" onkeydown="if(event.key === 'Enter') submitOwnerLogin()"/>
+        <p class="text-[11px] text-slate-400 mt-1 text-center">初期PIN: 9999</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="closeOwnerAuthModal()" class="flex-1 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg">戻る</button>
+        <button onclick="submitOwnerLogin()" class="flex-1 py-1.5 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg">認証して進む</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 入り時間選択モーダル（管理者用：15:00〜20:00） -->
   <div id="editModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-xl shadow-xl max-w-xs w-full p-4 space-y-3">
@@ -416,9 +555,9 @@
 
   <script>
     // ==========================================
-    // GAS Web App URL
+    // GAS Web App URL（設定済み）
     // ==========================================
-    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzhZF_FFdjS7TDegj33pnMPkgPZUe414S9eMkxB09yG62sX3kmgPQ5ZU4pJm2VuUYHL5A/exec';
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxNXcHUY-5Ec-Yjdw6ToXfpjGUlI9dhIzcVe7LJok9wghnk3QXWNeocjm_kOfK-iHvQ1A/exec';
 
     const STAFF_ENTRY_TIMES = ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
     const ADMIN_ENTRY_TIMES = [
@@ -433,13 +572,19 @@
     let state = {
       shopName: '',
       isAdmin: false,
+      isOwner: false,
       adminPin: '1234',
+      ownerPin: '9999',
       loggedStaff: null,
       year: 2026,
       month: 11,
       isPublished: false,
-      staff: [], // 初期ダミー名前を完全削除（空配列で開始）
+      staff: [],
       staffPins: {},
+      staffWages: {},
+      nightRate: 125,
+      specialAllowances: {},
+      timePunches: {},
       closedWeekdays: [1, 2],
       dayExceptions: {},
       shifts: {},
@@ -450,6 +595,13 @@
     let adminViewTab = 'final';
     let adminHasUnsavedChanges = false;
     let staffDraftShifts = {};
+
+    setInterval(() => {
+      const now = new Date();
+      const str = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      const el = document.getElementById('liveClock');
+      if (el) el.textContent = str;
+    }, 1000);
 
     // ==========================================
     // クラウド同期
@@ -465,7 +617,12 @@
           state.isPublished = !!data.isPublished;
           state.staff = Array.isArray(data.staff) ? data.staff : [];
           state.staffPins = data.staffPins || {};
+          state.staffWages = data.staffWages || {};
+          state.nightRate = Number(data.nightRate) || 125;
+          state.specialAllowances = data.specialAllowances || {};
+          state.timePunches = data.timePunches || {};
           state.adminPin = data.adminPin || state.adminPin;
+          state.ownerPin = data.ownerPin || state.ownerPin;
           state.closedWeekdays = data.closedWeekdays || state.closedWeekdays;
           state.dayExceptions = data.dayExceptions || state.dayExceptions;
           state.shifts = data.shifts || state.shifts;
@@ -475,20 +632,24 @@
         console.error('読み込み失敗:', err);
       } finally {
         hideSyncIndicator();
-        ensureStaffPins();
+        ensureStaffData();
         adminHasUnsavedChanges = false;
         updateAdminDirtyStatus();
         document.getElementById('shopNameInput').value = state.shopName || '';
+        document.getElementById('nightRateInput').value = state.nightRate;
         renderLoginStaffSelect();
         renderStaffControls();
         renderWeekdaysControl();
+        renderSpecialAllowances();
         renderAll();
+        updateTodayPunchDisplay();
       }
     }
 
-    function ensureStaffPins() {
+    function ensureStaffData() {
       state.staff.forEach(s => {
         if (!state.staffPins[s]) state.staffPins[s] = '0000';
+        if (!state.staffWages[s]) state.staffWages[s] = 1100;
       });
     }
 
@@ -501,7 +662,12 @@
           isPublished: state.isPublished,
           staff: state.staff,
           staffPins: state.staffPins,
+          staffWages: state.staffWages,
+          nightRate: state.nightRate,
+          specialAllowances: state.specialAllowances,
+          timePunches: state.timePunches,
           adminPin: state.adminPin,
+          ownerPin: state.ownerPin,
           closedWeekdays: state.closedWeekdays,
           dayExceptions: state.dayExceptions,
           shifts: state.shifts,
@@ -520,6 +686,342 @@
         showSyncIndicator('保存エラー', true);
         return false;
       }
+    }
+
+    // ==========================================
+    // 勤怠タイムカード打刻機能
+    // ==========================================
+    async function recordPunch(type) {
+      const staff = document.getElementById('punchStaffSelect').value;
+      if (!staff) return alert('打刻するスタッフを選択してください。');
+
+      const now = new Date();
+      const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const key = `${staff}_${dateKey}`;
+
+      if (!state.timePunches[key]) {
+        state.timePunches[key] = { in: null, out: null };
+      }
+
+      if (type === 'clockIn') {
+        state.timePunches[key].in = timeStr;
+        alert(`【${staff}さん】\n出勤打刻完了: ${timeStr}`);
+      } else {
+        state.timePunches[key].out = timeStr;
+        alert(`【${staff}さん】\n退勤打刻完了: ${timeStr}`);
+      }
+
+      await executeSaveToCloud();
+      updateTodayPunchDisplay();
+      if (state.isOwner) renderPayrollTable();
+    }
+
+    function updateTodayPunchDisplay() {
+      const staff = document.getElementById('punchStaffSelect').value;
+      const el = document.getElementById('todayPunchStatus');
+      if (!staff) {
+        el.textContent = 'スタッフを選択してください';
+        return;
+      }
+      const now = new Date();
+      const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const punch = state.timePunches[`${staff}_${dateKey}`];
+      if (!punch || (!punch.in && !punch.out)) {
+        el.innerHTML = `<span class="text-slate-400">本日 (${now.getMonth()+1}/${now.getDate()}): 未打刻</span>`;
+      } else {
+        const inText = punch.in ? `出勤: ${punch.in}` : '出勤: --:--';
+        const outText = punch.out ? `退勤: ${punch.out}` : '退勤: --:--';
+        el.innerHTML = `<span class="text-emerald-700 font-bold">${inText}</span> ｜ <span class="text-rose-700 font-bold">${outText}</span>`;
+      }
+    }
+
+    // ==========================================
+    // 責任者画面 ＆ 給与集計ロジック
+    // ==========================================
+    function openOwnerAuthModal() {
+      document.getElementById('ownerPinInput').value = '';
+      document.getElementById('ownerAuthModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('ownerPinInput').focus(), 50);
+    }
+    function closeOwnerAuthModal() {
+      document.getElementById('ownerAuthModal').classList.add('hidden');
+    }
+    function submitOwnerLogin() {
+      const pin = document.getElementById('ownerPinInput').value.trim();
+      if (pin === state.ownerPin) {
+        state.isOwner = true;
+        closeOwnerAuthModal();
+        updateViewMode();
+        renderOwnerDashboard();
+      } else {
+        alert('責任者暗証番号が正しくありません。');
+        document.getElementById('ownerPinInput').value = '';
+        document.getElementById('ownerPinInput').focus();
+      }
+    }
+    function closeOwnerView() {
+      state.isOwner = false;
+      updateViewMode();
+    }
+    function changeOwnerPasswordPrompt() {
+      const current = prompt('現在の責任者パスワードを入力してください:');
+      if (current !== state.ownerPin) return alert('パスワードが違います。');
+      const next = prompt('新しい責任者パスワードを入力してください:');
+      if (!next) return;
+      state.ownerPin = next.trim();
+      executeSaveToCloud();
+      alert('責任者パスワードを変更・保存しました！');
+    }
+
+    function renderOwnerDashboard() {
+      const container = document.getElementById('staffWageList');
+      container.innerHTML = '';
+      state.staff.forEach(s => {
+        const wage = state.staffWages[s] || 1100;
+        const div = document.createElement('div');
+        div.className = "flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs";
+        div.innerHTML = `
+          <span class="font-bold text-slate-800">${s}</span>
+          <div class="flex items-center gap-1">
+            <span class="text-slate-400">¥</span>
+            <input type="number" step="10" min="800" max="5000" value="${wage}" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold w-20 text-right" onchange="updateStaffWage('${s}', this.value)"/>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      renderSpecialAllowances();
+      renderPayrollTable();
+    }
+
+    function updateStaffWage(name, val) {
+      state.staffWages[name] = Number(val) || 1100;
+      executeSaveToCloud();
+      renderPayrollTable();
+    }
+
+    function updateNightRate(val) {
+      state.nightRate = Number(val) || 125;
+      executeSaveToCloud();
+      renderPayrollTable();
+    }
+
+    function addSpecialAllowance() {
+      const date = document.getElementById('allowanceDateInput').value;
+      const amount = Number(document.getElementById('allowanceAmountInput').value);
+      if (!date || !amount) return alert('日付と手当金額を入力してください。');
+      state.specialAllowances[date] = amount;
+      document.getElementById('allowanceAmountInput').value = '';
+      renderSpecialAllowances();
+      executeSaveToCloud();
+      renderPayrollTable();
+    }
+
+    function deleteSpecialAllowance(date) {
+      delete state.specialAllowances[date];
+      renderSpecialAllowances();
+      executeSaveToCloud();
+      renderPayrollTable();
+    }
+
+    function renderSpecialAllowances() {
+      const container = document.getElementById('allowanceTagList');
+      container.innerHTML = '';
+      Object.keys(state.specialAllowances).sort().forEach(date => {
+        const amt = state.specialAllowances[date];
+        const span = document.createElement('span');
+        span.className = "inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded";
+        span.innerHTML = `<span>${date.slice(5)}: +¥${amt.toLocaleString()}</span><button onclick="deleteSpecialAllowance('${date}')" class="text-amber-500 hover:text-rose-600">✕</button>`;
+        container.appendChild(span);
+      });
+    }
+
+    function renderPayrollTable() {
+      const name = state.shopName ? `【${state.shopName}】` : '';
+      document.getElementById('payrollPrintTitle').textContent = `${name} ${state.year}年${state.month}月 給与支給明細・人件費一覧`;
+      const now = new Date();
+      document.getElementById('payrollGeneratedDate').textContent = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
+
+      const tbody = document.getElementById('payrollTableBody');
+      tbody.innerHTML = '';
+
+      let totalShopCost = 0;
+      let totalShopHours = 0;
+      let totalShopNightHours = 0;
+      let totalShopAllowance = 0;
+
+      const days = getDays();
+
+      state.staff.forEach(s => {
+        const baseWage = state.staffWages[s] || 1100;
+        let staffDaysCount = 0;
+        let staffTotalMinutes = 0;
+        let staffNightMinutes = 0;
+        let staffAllowanceSum = 0;
+
+        days.forEach(d => {
+          if (d.isClosed) return;
+          const shiftVal = state.shifts[`${s}_${d.dateKey}`];
+          const punch = state.timePunches[`${s}_${d.dateKey}`];
+
+          let startMinutes = null;
+          let endMinutes = null;
+
+          if (punch && punch.in && punch.out) {
+            const [ih, im] = punch.in.split(':').map(Number);
+            const [oh, om] = punch.out.split(':').map(Number);
+            startMinutes = ih * 60 + im;
+            endMinutes = oh * 60 + om;
+          } else if (shiftVal && shiftVal !== '休み') {
+            const startStr = shiftVal === 'ALL' ? '17:00' : shiftVal;
+            const [sh, sm] = startStr.split(':').map(Number);
+            startMinutes = sh * 60 + sm;
+            endMinutes = 22 * 60;
+          }
+
+          if (startMinutes !== null && endMinutes !== null && endMinutes > startMinutes) {
+            staffDaysCount++;
+            const workMin = endMinutes - startMinutes;
+            staffTotalMinutes += workMin;
+
+            const nightThreshold = 22 * 60;
+            if (endMinutes > nightThreshold) {
+              const nightMin = endMinutes - Math.max(startMinutes, nightThreshold);
+              staffNightMinutes += nightMin;
+            }
+
+            if (state.specialAllowances[d.dateKey]) {
+              staffAllowanceSum += state.specialAllowances[d.dateKey];
+            }
+          }
+        });
+
+        const totalHours = staffTotalMinutes / 60;
+        const nightHours = staffNightMinutes / 60;
+        const regularHours = totalHours - nightHours;
+
+        const regularPay = Math.round(regularHours * baseWage);
+        const nightPay = Math.round(nightHours * baseWage * (state.nightRate / 100));
+        const totalPay = regularPay + nightPay + staffAllowanceSum;
+
+        totalShopCost += totalPay;
+        totalShopHours += totalHours;
+        totalShopNightHours += nightHours;
+        totalShopAllowance += staffAllowanceSum;
+
+        const tr = document.createElement('tr');
+        tr.className = "border-b border-slate-200 hover:bg-slate-50";
+        tr.innerHTML = `
+          <td class="border border-slate-300 p-2 font-bold bg-slate-50">${s}</td>
+          <td class="border border-slate-300 p-2 font-mono">¥${baseWage.toLocaleString()}</td>
+          <td class="border border-slate-300 p-2 font-mono">${staffDaysCount}日</td>
+          <td class="border border-slate-300 p-2 font-mono font-bold">${totalHours.toFixed(1)}h</td>
+          <td class="border border-slate-300 p-2 font-mono">¥${regularPay.toLocaleString()}</td>
+          <td class="border border-slate-300 p-2 font-mono text-amber-700 font-bold">¥${nightPay.toLocaleString()}<br><span class="text-[9px] font-normal">(${nightHours.toFixed(1)}h)</span></td>
+          <td class="border border-slate-300 p-2 font-mono text-emerald-700 font-bold">¥${staffAllowanceSum.toLocaleString()}</td>
+          <td class="border border-slate-300 p-2 font-mono text-base font-extrabold text-indigo-700 bg-indigo-50/50">¥${totalPay.toLocaleString()}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('summaryTotalCost').textContent = `¥${totalShopCost.toLocaleString()}`;
+      document.getElementById('summaryTotalHours').textContent = `${totalShopHours.toFixed(1)}h`;
+      document.getElementById('summaryNightHours').textContent = `${totalShopNightHours.toFixed(1)}h`;
+      document.getElementById('summaryAllowanceTotal').textContent = `¥${totalShopAllowance.toLocaleString()}`;
+    }
+
+    function printPayrollPdf() {
+      const originalTitle = document.title;
+      const shop = state.shopName ? state.shopName : '店舗';
+      document.title = `${shop}給与明細 ${state.year}年${state.month}月`;
+      window.print();
+      setTimeout(() => { document.title = originalTitle; }, 1000);
+    }
+
+    // ==========================================
+    // 画面状態の切替表示制御
+    // ==========================================
+    function updateViewMode() {
+      const gate = document.getElementById('staffAuthGate');
+      const staffView = document.getElementById('staffView');
+      const adminView = document.getElementById('adminView');
+      const ownerView = document.getElementById('ownerView');
+      const btnOpenLogin = document.getElementById('btnOpenLogin');
+      const adminNavGroup = document.getElementById('adminNavGroup');
+
+      if (state.isOwner) {
+        gate.classList.add('hidden');
+        staffView.classList.add('hidden');
+        adminView.classList.add('hidden');
+        ownerView.classList.remove('hidden');
+        btnOpenLogin.classList.add('hidden');
+        adminNavGroup.classList.remove('hidden');
+        document.getElementById('headerTitle').textContent = '責任者用ダッシュボード';
+        document.getElementById('headerSub').textContent = 'スタッフ別時給・深夜割増・手当・給与PDF出力';
+      } else if (state.isAdmin) {
+        gate.classList.add('hidden');
+        staffView.classList.add('hidden');
+        adminView.classList.remove('hidden');
+        ownerView.classList.add('hidden');
+        btnOpenLogin.classList.add('hidden');
+        adminNavGroup.classList.remove('hidden');
+        document.getElementById('headerTitle').textContent = 'シフト作成・管理（管理者）';
+        document.getElementById('headerSub').textContent = '変更後は「変更内容を確定・保存する」を押してください';
+      } else if (state.loggedStaff) {
+        gate.classList.add('hidden');
+        staffView.classList.remove('hidden');
+        adminView.classList.add('hidden');
+        ownerView.classList.add('hidden');
+        btnOpenLogin.classList.remove('hidden');
+        adminNavGroup.classList.add('hidden');
+        document.getElementById('headerTitle').textContent = 'シフト希望提出';
+        document.getElementById('headerSub').textContent = '17:00〜20:00入り・ALL / 確定送信対応';
+        document.getElementById('currentStaffBadge').textContent = state.loggedStaff;
+        renderStaffList();
+      } else {
+        gate.classList.remove('hidden');
+        staffView.classList.add('hidden');
+        adminView.classList.add('hidden');
+        ownerView.classList.add('hidden');
+        btnOpenLogin.classList.remove('hidden');
+        adminNavGroup.classList.add('hidden');
+        document.getElementById('headerTitle').textContent = 'バイトシフト＆勤怠管理';
+        document.getElementById('headerSub').textContent = '勤怠打刻・シフト確認・希望提出';
+        updateTopCardHeader();
+      }
+    }
+
+    // ==========================================
+    // アプリ初期化
+    // ==========================================
+    function init() {
+      ensureStaffData();
+
+      const selMonth = document.getElementById('selMonth');
+      for (let m = 1; m <= 12; m++) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = `${m}月`;
+        if (m === state.month) opt.selected = true;
+        selMonth.appendChild(opt);
+      }
+
+      const grid = document.getElementById('timeButtonsGrid');
+      ADMIN_ENTRY_TIMES.forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = "py-1.5 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-indigo-50 hover:text-indigo-600 transition";
+        btn.textContent = t;
+        btn.onclick = () => setShiftValue(t);
+        grid.appendChild(btn);
+      });
+
+      renderLoginStaffSelect();
+      renderStaffControls();
+      renderWeekdaysControl();
+      renderAll();
+      updateViewMode();
+      loadCloudData();
     }
 
     function updateShopName(val) {
@@ -546,10 +1048,7 @@
       state.isPublished = !state.isPublished;
       await executeSaveToCloud();
       renderAll();
-      alert(state.isPublished 
-        ? 'シフトを【完成・公開】にしました！\nトップ画面からスタッフ全員が閲覧可能になりました。' 
-        : 'シフトを【下書き（非公開）】に戻しました。'
-      );
+      alert(state.isPublished ? 'シフトを【完成・公開】にしました！' : 'シフトを【下書き（非公開）】に戻しました。');
     }
 
     function updatePrintHeader() {
@@ -626,39 +1125,6 @@
       document.getElementById('syncBadge').classList.add('opacity-0');
     }
 
-    // ==========================================
-    // アプリ初期化
-    // ==========================================
-    function init() {
-      const selMonth = document.getElementById('selMonth');
-      for (let m = 1; m <= 12; m++) {
-        const opt = document.createElement('option');
-        opt.value = m;
-        opt.textContent = `${m}月`;
-        if (m === state.month) opt.selected = true;
-        selMonth.appendChild(opt);
-      }
-
-      const grid = document.getElementById('timeButtonsGrid');
-      ADMIN_ENTRY_TIMES.forEach(t => {
-        const btn = document.createElement('button');
-        btn.className = "py-1.5 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-indigo-50 hover:text-indigo-600 transition";
-        btn.textContent = t;
-        btn.onclick = () => setShiftValue(t);
-        grid.appendChild(btn);
-      });
-
-      renderLoginStaffSelect();
-      renderStaffControls();
-      renderWeekdaysControl();
-      renderAll();
-      updateViewMode();
-      loadCloudData();
-    }
-
-    // ==========================================
-    // 管理者タブ切替
-    // ==========================================
     function switchAdminTab(tab) {
       adminViewTab = tab;
       const tabFinal = document.getElementById('tabFinal');
@@ -680,9 +1146,6 @@
       renderAll();
     }
 
-    // ==========================================
-    // トップ画面での完成シフト閲覧モーダル
-    // ==========================================
     function openPublicShiftModal() {
       if (!state.isPublished && !state.isAdmin) {
         alert('現在シフトを作成・調整中です。\n公開されるまでもう少々お待ちください！');
@@ -766,17 +1229,17 @@
       table.appendChild(tbody);
     }
 
-    // ==========================================
-    // スタッフ個別ログイン・下書き管理
-    // ==========================================
     function renderLoginStaffSelect() {
       const sel = document.getElementById('loginStaffSelect');
+      const punchSel = document.getElementById('punchStaffSelect');
       sel.innerHTML = '';
+      punchSel.innerHTML = '';
       if (state.staff.length === 0) {
         const opt = document.createElement('option');
         opt.value = "";
         opt.textContent = "スタッフ未登録（管理者が追加）";
         sel.appendChild(opt);
+        punchSel.appendChild(opt.cloneNode(true));
         return;
       }
       state.staff.forEach(s => {
@@ -784,6 +1247,7 @@
         opt.value = s;
         opt.textContent = s;
         sel.appendChild(opt);
+        punchSel.appendChild(opt.cloneNode(true));
       });
     }
 
@@ -829,20 +1293,17 @@
       const targetPin = state.staffPins[state.loggedStaff] || '0000';
       if (current !== targetPin) return alert('暗証番号が一致しません。');
 
-      const next = prompt('新しい暗証番号（4桁の数字など）を入力してください:');
+      const next = prompt('新しい暗証番号を入力してください:');
       if (!next) return;
       state.staffPins[state.loggedStaff] = next.trim();
       executeSaveToCloud();
-      alert('暗証番号を変更しました！次回からこの番号でログインしてください。');
+      alert('暗証番号を変更しました！');
     }
 
     function updateStaffDraftShift(dateKey, val) {
       if (!state.loggedStaff) return;
-      if (!val) {
-        delete staffDraftShifts[dateKey];
-      } else {
-        staffDraftShifts[dateKey] = val;
-      }
+      if (!val) delete staffDraftShifts[dateKey];
+      else staffDraftShifts[dateKey] = val;
       
       const notice = document.getElementById('draftNotice');
       notice.textContent = '⚠️ 未送信の変更があります。「シフト希望を確定・送信する」を押してください';
@@ -870,13 +1331,9 @@
       const notice = document.getElementById('draftNotice');
       notice.textContent = '✅ シフト希望を送信・保存しました！';
       notice.className = 'text-xs text-emerald-600 font-bold';
-
       alert(`【${state.loggedStaff}さん】\nシフト希望の送信が完了しました！`);
     }
 
-    // ==========================================
-    // 管理者認証
-    // ==========================================
     function openAdminLoginModal() {
       document.getElementById('adminPinInput').value = '';
       document.getElementById('loginModal').classList.remove('hidden');
@@ -902,6 +1359,7 @@
         if (!confirm('保存されていない管理者変更があります。ログアウトしますか？')) return;
       }
       state.isAdmin = false;
+      state.isOwner = false;
       updateViewMode();
     }
     function changeAdminPasswordPrompt() {
@@ -914,46 +1372,6 @@
       alert('管理者パスワードを変更・保存しました！');
     }
 
-    function updateViewMode() {
-      const gate = document.getElementById('staffAuthGate');
-      const staffView = document.getElementById('staffView');
-      const adminView = document.getElementById('adminView');
-      const btnOpenLogin = document.getElementById('btnOpenLogin');
-      const adminNavGroup = document.getElementById('adminNavGroup');
-
-      if (state.isAdmin) {
-        gate.classList.add('hidden');
-        staffView.classList.add('hidden');
-        adminView.classList.remove('hidden');
-        btnOpenLogin.classList.add('hidden');
-        adminNavGroup.classList.remove('hidden');
-        document.getElementById('headerTitle').textContent = 'シフト作成・管理（管理者）';
-        document.getElementById('headerSub').textContent = '変更後は「変更内容を確定・保存する」を押してください';
-      } else if (state.loggedStaff) {
-        gate.classList.add('hidden');
-        staffView.classList.remove('hidden');
-        adminView.classList.add('hidden');
-        btnOpenLogin.classList.remove('hidden');
-        adminNavGroup.classList.add('hidden');
-        document.getElementById('headerTitle').textContent = 'シフト希望提出';
-        document.getElementById('headerSub').textContent = '17:00〜20:00入り・ALL / 確定送信対応';
-        document.getElementById('currentStaffBadge').textContent = state.loggedStaff;
-        renderStaffList();
-      } else {
-        gate.classList.remove('hidden');
-        staffView.classList.add('hidden');
-        adminView.classList.add('hidden');
-        btnOpenLogin.classList.remove('hidden');
-        adminNavGroup.classList.add('hidden');
-        document.getElementById('headerTitle').textContent = 'バイトシフト管理';
-        document.getElementById('headerSub').textContent = 'シフトの確認 または 希望提出';
-        updateTopCardHeader();
-      }
-    }
-
-    // ==========================================
-    // スタッフ管理（管理者用）
-    // ==========================================
     function addStaff() {
       const input = document.getElementById('newStaffName');
       const name = input.value.trim();
@@ -961,6 +1379,7 @@
       if (state.staff.includes(name)) return alert('そのスタッフ名は既に登録されています。');
       state.staff.push(name);
       state.staffPins[name] = '0000';
+      state.staffWages[name] = 1100;
       input.value = '';
       renderLoginStaffSelect();
       renderStaffControls();
@@ -972,12 +1391,9 @@
       if (!confirm(`スタッフ「${name}」を削除してもよろしいですか？`)) return;
       state.staff = state.staff.filter(s => s !== name);
       delete state.staffPins[name];
-      Object.keys(state.shifts).forEach(k => {
-        if (k.startsWith(`${name}_`)) delete state.shifts[k];
-      });
-      Object.keys(state.originalShifts).forEach(k => {
-        if (k.startsWith(`${name}_`)) delete state.originalShifts[k];
-      });
+      delete state.staffWages[name];
+      Object.keys(state.shifts).forEach(k => { if (k.startsWith(`${name}_`)) delete state.shifts[k]; });
+      Object.keys(state.originalShifts).forEach(k => { if (k.startsWith(`${name}_`)) delete state.originalShifts[k]; });
       if (state.loggedStaff === name) state.loggedStaff = null;
       renderLoginStaffSelect();
       renderStaffControls();
@@ -1013,9 +1429,6 @@
       });
     }
 
-    // ==========================================
-    // カレンダー・テーブル描画
-    // ==========================================
     function renderWeekdaysControl() {
       const container = document.getElementById('weekdayButtons');
       container.innerHTML = '';
@@ -1062,6 +1475,7 @@
       renderTable('tableTopHalf', days.slice(0, 15));
       renderTable('tableBottomHalf', days.slice(15));
       if (state.loggedStaff) renderStaffList();
+      if (state.isOwner) renderPayrollTable();
     }
 
     function renderTable(tableId, days) {
@@ -1091,7 +1505,7 @@
 
         th.className = `border border-slate-300 p-1 min-w-[50px] select-none ${bg} ${adminViewTab === 'final' ? 'cursor-pointer hover:opacity-80' : ''}`;
         if (adminViewTab === 'final') {
-          th.title = "クリックで個別例外（営業/休業）を切替";
+          th.title = "クリックで個別例外を切替";
           th.onclick = () => toggleDayException(d.dateKey, d.isWeekdayClosed);
         }
 
@@ -1190,9 +1604,6 @@
       markAdminDirty();
     }
 
-    // ==========================================
-    // スタッフ提出画面描画
-    // ==========================================
     function renderStaffList() {
       if (!state.loggedStaff) return;
       const list = document.getElementById('staffDaysList');
