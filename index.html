@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>バイトシフト管理・希望提出アプリ</title>
+  <title>シフト管理アプリ</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .closed-pattern {
@@ -14,7 +14,7 @@
       .no-print { display: none !important; }
       body { background: white !important; padding: 0 !important; }
       .print-area { border: none !important; box-shadow: none !important; }
-      @page { size: A4 landscape; margin: 8mm; }
+      @page { size: A4 landscape; margin: 6mm; }
     }
   </style>
 </head>
@@ -128,27 +128,42 @@
     <!-- ========================================== -->
     <div id="adminView" class="hidden space-y-4">
       
-      <!-- スタッフ管理パネル -->
+      <!-- 店舗名・スタッフ管理パネル -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 no-print">
-        <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div class="flex items-center gap-2">
-            <span class="font-bold text-xs text-slate-700">👥 スタッフ登録:</span>
+            <span class="font-bold text-xs text-slate-700">🏪 店舗名:</span>
             <input 
               type="text" 
-              id="newStaffName" 
-              placeholder="名前を入力（例: 山田）" 
-              class="border border-slate-300 rounded px-2.5 py-1 text-xs w-44 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              onkeydown="if(event.key === 'Enter') addStaff()"
+              id="shopNameInput" 
+              placeholder="店舗名を入力（例: カフェ〇〇）" 
+              class="border border-slate-300 rounded px-2.5 py-1 text-xs w-56 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              onchange="updateShopName(this.value)"
             />
-            <button onclick="addStaff()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1 rounded transition">
-              ＋ 追加
-            </button>
+            <span class="text-[11px] text-slate-400">※PDFのタイトル・見出しに反映されます</span>
           </div>
+
           <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400">登録中: <span id="staffCount" class="font-bold text-slate-700">0</span>名</span>
+            <span class="text-xs text-slate-400">登録スタッフ: <span id="staffCount" class="font-bold text-slate-700">0</span>名</span>
             <button onclick="changeAdminPasswordPrompt()" class="text-xs text-indigo-600 hover:underline">🔑 管理者PIN変更</button>
           </div>
         </div>
+
+        <!-- スタッフ追加 -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-bold text-xs text-slate-700">👥 スタッフ登録:</span>
+          <input 
+            type="text" 
+            id="newStaffName" 
+            placeholder="名前を入力（例: 山田）" 
+            class="border border-slate-300 rounded px-2.5 py-1 text-xs w-44 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            onkeydown="if(event.key === 'Enter') addStaff()"
+          />
+          <button onclick="addStaff()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1 rounded transition">
+            ＋ 追加
+          </button>
+        </div>
+
         <!-- 登録スタッフ一覧（PIN編集・削除） -->
         <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100" id="staffTagList"></div>
       </div>
@@ -158,7 +173,7 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex items-center gap-2">
             <span class="font-bold text-xs text-slate-700">年月:</span>
-            <select id="selYear" onchange="changeDate()" class="border border-slate-300 rounded px-2 py-1 text-xs">
+            <select id="selYear" onchange="changeDate()" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold">
               <option value="2026">2026年</option>
               <option value="2027">2027年</option>
             </select>
@@ -171,8 +186,9 @@
           </div>
 
           <div>
-            <button onclick="window.print()" class="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition">
-              🖨️ A4印刷 / PDF
+            <button onclick="printPdfWithCustomName()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5">
+              <span>🖨️</span>
+              <span>A4印刷 / PDF出力</span>
             </button>
           </div>
         </div>
@@ -207,12 +223,25 @@
         </div>
       </div>
 
-      <!-- シフト表 -->
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 print-area space-y-6">
+      <!-- シフト表（印刷対象エリア） -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 print-area space-y-4">
+        
+        <!-- 印刷時・PDF出力時に大きく表示されるヘッダー -->
+        <div class="border-b-2 border-slate-800 pb-2 flex items-baseline justify-between">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold text-slate-900 tracking-wide" id="printHeadingTitle">
+              【店舗名】2026年11月 シフト表
+            </h2>
+          </div>
+          <div class="text-[10px] text-slate-400">
+            作成日: <span id="printGeneratedDate"></span>
+          </div>
+        </div>
+
         <div>
           <div class="font-bold text-xs text-slate-600 mb-1 px-1 flex items-center justify-between">
             <span>【上段】 1日 〜 15日</span>
-            <span class="text-[11px] text-slate-400 font-normal">セルクリックで調整（確定保存ボタンで反映）</span>
+            <span class="text-[11px] text-slate-400 font-normal no-print">セルクリックで調整（確定保存ボタンで反映）</span>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full border-collapse border border-slate-300 text-center text-xs" id="tableTopHalf"></table>
@@ -280,6 +309,7 @@
     const HOLIDAYS = { '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日' };
 
     let state = {
+      shopName: '', // 店舗名
       isAdmin: false,
       adminPin: '1234',
       loggedStaff: null,
@@ -306,6 +336,7 @@
         const res = await fetch(GAS_API_URL);
         const data = await res.json();
         if (data && Object.keys(data).length > 0) {
+          state.shopName = data.shopName || '';
           state.staff = data.staff || state.staff;
           state.staffPins = data.staffPins || {};
           state.adminPin = data.adminPin || state.adminPin;
@@ -320,6 +351,7 @@
         ensureStaffPins();
         adminHasUnsavedChanges = false;
         updateAdminDirtyStatus();
+        document.getElementById('shopNameInput').value = state.shopName || '';
         renderLoginStaffSelect();
         renderStaffControls();
         renderWeekdaysControl();
@@ -338,6 +370,7 @@
       showSyncIndicator('クラウドに保存中...');
       try {
         const payload = {
+          shopName: state.shopName,
           staff: state.staff,
           staffPins: state.staffPins,
           adminPin: state.adminPin,
@@ -358,6 +391,35 @@
         showSyncIndicator('保存エラー', true);
         return false;
       }
+    }
+
+    function updateShopName(val) {
+      state.shopName = val.trim();
+      executeSaveToCloud();
+      updatePrintHeader();
+    }
+
+    function updatePrintHeader() {
+      const name = state.shopName ? `【${state.shopName}】` : '';
+      document.getElementById('printHeadingTitle').textContent = `${name} ${state.year}年${state.month}月 シフト表`;
+      
+      const now = new Date();
+      document.getElementById('printGeneratedDate').textContent = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
+    }
+
+    // PDFファイル名を「【店名】シフト 年 月」に指定して印刷ダイアログを開く
+    function printPdfWithCustomName() {
+      const originalTitle = document.title;
+      const shop = state.shopName ? state.shopName : '店舗';
+      // ブラウザがPDF保存時のファイル名に使うページタイトルを一時的に書き換え
+      document.title = `${shop}シフト ${state.year}年${state.month}月`;
+      
+      window.print();
+      
+      // 印刷ダイアログが閉じた後にタイトルを元に戻す
+      setTimeout(() => {
+        document.title = originalTitle;
+      }, 1000);
     }
 
     function markAdminDirty() {
@@ -709,6 +771,7 @@
     }
 
     function renderAll() {
+      updatePrintHeader();
       const days = getDays();
       renderTable('tableTopHalf', days.slice(0, 15));
       renderTable('tableBottomHalf', days.slice(15));
