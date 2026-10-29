@@ -31,7 +31,7 @@
     <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 no-print">  
       <div>  
         <h1 class="font-bold text-lg text-slate-900" id="headerTitle">シフト希望提出</h1>  
-        <p class="text-xs text-slate-500" id="headerSub">15:00〜20:00(30分刻み)入り / クラウド同期対応</p>  
+        <p class="text-xs text-slate-500" id="headerSub">15:00〜20:00(30分刻み)入り・ALL / クラウド同期対応</p>  
       </div>  
   
       <div class="flex items-center gap-2">  
@@ -53,7 +53,7 @@
       <div class="flex items-center justify-between border-b border-slate-100 pb-3">  
         <div>  
           <h2 class="font-bold text-base text-slate-900">シフト希望の入力</h2>  
-          <p class="text-xs text-slate-500">出勤可能な入り時間（または休み希望）を選択してください</p>  
+          <p class="text-xs text-slate-500">出勤可能な入り時間（または「ALL」「休み」）を選択してください</p>  
         </div>  
         <div class="flex items-center gap-2">  
           <span class="text-xs font-bold text-slate-700">お名前:</span>  
@@ -175,17 +175,24 @@
         <div id="modalTitle" class="font-bold text-xs text-slate-800"></div>  
         <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-sm">✕</button>  
       </div>  
+        
+      <!-- ALLボタン -->  
+      <button onclick="setShiftValue('ALL')" class="w-full py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition">  
+        ✨ ALL  
+      </button>  
+  
       <div id="timeButtonsGrid" class="grid grid-cols-3 gap-1.5"></div>  
+  
       <div class="flex gap-2 pt-2 border-t border-slate-100">  
-        <button onclick="setShiftValue('休み')" class="flex-1 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 rounded border border-amber-200">休み</button>  
-        <button onclick="setShiftValue('')" class="flex-1 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded">クリア</button>  
+        <button onclick="setShiftValue('休み')" class="flex-1 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200">休み</button>  
+        <button onclick="setShiftValue('')" class="flex-1 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded">クリア</button>  
       </div>  
     </div>  
   </div>  
   
   <script>  
     // ==========================================  
-    // ★ ここにステップ1で発行したURLを貼り付けます  
+    // ★ ここにご自身のGASのURLを貼り付けてください  
     // ==========================================  
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzhZF_FFdjS7TDegj33pnMPkgPZUe414S9eMkxB09yG62sX3kmgPQ5ZU4pJm2VuUYHL5A/exec';  
   
@@ -207,7 +214,7 @@
     };  
   
     // ==========================================  
-    // クラウド同期（読み込み ＆ 自動保存）  
+    // クラウド同期  
     // ==========================================  
     async function loadCloudData() {  
       if (!GAS_API_URL || GAS_API_URL === 'YOUR_GAS_WEB_APP_URL') return;  
@@ -249,7 +256,7 @@
           };  
           await fetch(GAS_API_URL, {  
             method: 'POST',  
-            mode: 'no-cors', // GASとの安全なCORS通信  
+            mode: 'no-cors',  
             headers: { 'Content-Type': 'application/json' },  
             body: JSON.stringify(payload)  
           });  
@@ -258,7 +265,7 @@
           console.error('保存失敗:', err);  
           showSyncIndicator('保存エラー', true);  
         }  
-      }, 500); // 入力後0.5秒待ってまとめて送信  
+      }, 500);  
     }  
   
     function showSyncIndicator(text, fade = false) {  
@@ -299,7 +306,7 @@
       renderWeekdaysControl();  
       renderAll();  
       updateViewMode();  
-      loadCloudData(); // 起動時に自動取得  
+      loadCloudData();  
     }  
   
     // ==========================================  
@@ -500,10 +507,16 @@
             td.className = "border border-slate-300 closed-pattern text-slate-400 select-none";  
             td.textContent = "-";  
           } else {  
-            td.className = `border border-slate-300 p-1 cursor-pointer transition ${  
-              val === '休み' ? 'bg-amber-50 text-amber-700 font-bold' :  
-              val ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-indigo-50/50 text-slate-300'  
-            }`;  
+            let cellStyle = 'hover:bg-indigo-50/50 text-slate-300';  
+            if (val === '休み') {  
+              cellStyle = 'bg-amber-50 text-amber-700 font-bold';  
+            } else if (val === 'ALL') {  
+              cellStyle = 'bg-emerald-50 text-emerald-700 font-bold text-xs tracking-wider';  
+            } else if (val) {  
+              cellStyle = 'bg-indigo-50 text-indigo-700 font-bold';  
+            }  
+  
+            td.className = `border border-slate-300 p-1 cursor-pointer transition ${cellStyle}`;  
             td.textContent = val || '-';  
             td.onclick = () => openModal(s, d);  
           }  
@@ -556,11 +569,31 @@
         if (d.isClosed) return;  
         const count = (d.dow === 0 || d.dow === 6 || d.isHoliday) ? 3 : 2;  
         let assigned = 0;  
+  
+        // 1. すでに固定時間が入っている人をカウント  
+        state.staff.forEach(s => {  
+          const key = `${s}_${d.dateKey}`;  
+          if (state.shifts[key] && state.shifts[key] !== '休み' && state.shifts[key] !== 'ALL') {  
+            assigned++;  
+          }  
+        });  
+  
+        // 2. 「ALL」を出している人を優先して枠に割り当てる  
+        const allStaff = state.staff.filter(s => state.shifts[`${s}_${d.dateKey}`] === 'ALL');  
+        allStaff.forEach(s => {  
+          if (assigned < count) {  
+            const key = `${s}_${d.dateKey}`;  
+            state.shifts[key] = assigned === 0 ? '16:00' : (assigned === 1 ? '17:00' : '18:00');  
+            assigned++;  
+          }  
+        });  
+  
+        // 3. まだ枠が空いていれば、希望未提出のスタッフをランダムで埋める  
         const shuffled = [...state.staff].sort(() => 0.5 - Math.random());  
-        shuffled.forEach((s, idx) => {  
+        shuffled.forEach((s) => {  
           const key = `${s}_${d.dateKey}`;  
           if (assigned < count && !state.shifts[key]) {  
-            state.shifts[key] = idx === 0 ? '16:00' : (idx === 1 ? '17:00' : '18:00');  
+            state.shifts[key] = assigned === 0 ? '16:00' : (assigned === 1 ? '17:00' : '18:00');  
             assigned++;  
           }  
         });  
@@ -601,11 +634,21 @@
         if (d.isClosed) {  
           action = `<span class="text-slate-400">店休</span>`;  
         } else {  
-          let opts = `<option value="">未選択</option><option value="休み" ${curVal==='休み'?'selected':''}>✕ 休み希望</option>`;  
+          let opts = `  
+            <option value="">未選択</option>  
+            <option value="ALL" ${curVal==='ALL'?'selected':''}>✨ ALL（何時でも可）</option>  
+            <option value="休み" ${curVal==='休み'?'selected':''}>✕ 休み希望</option>  
+          `;  
           ENTRY_TIMES.forEach(t => {  
             opts += `<option value="${t}" ${curVal===t?'selected':''}>${t} 入り</option>`;  
           });  
-          action = `<select onchange="updateStaffShift('${d.dateKey}', this.value)" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold ${curVal ? 'bg-indigo-50 text-indigo-700' : ''}">${opts}</select>`;  
+            
+          let selectBg = '';  
+          if (curVal === 'ALL') selectBg = 'bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold';  
+          else if (curVal === '休み') selectBg = 'bg-amber-50 text-amber-700 border-amber-300';  
+          else if (curVal) selectBg = 'bg-indigo-50 text-indigo-700 border-indigo-300';  
+  
+          action = `<select onchange="updateStaffShift('${d.dateKey}', this.value)" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold ${selectBg}">${opts}</select>`;  
         }  
   
         div.innerHTML = label + action;  
@@ -629,7 +672,8 @@
         if (d.isClosed) return;  
         const val = state.shifts[`${state.currentStaff}_${d.dateKey}`];  
         if (val) {  
-          text += `${d.day}日(${d.dowName}): ${val === '休み' ? '休み' : val + '入り'}\n`;  
+          const displayVal = (val === '休み' || val === 'ALL') ? val : val + '入り';  
+          text += `${d.day}日(${d.dowName}): ${displayVal}\n`;  
         }  
       });  
       navigator.clipboard.writeText(text);  
