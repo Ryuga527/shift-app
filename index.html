@@ -11,9 +11,6 @@
       background-image: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 3px, #f1f5f9 3px, #f1f5f9 8px);
     }
 
-    /* ========================================== */
-    /* A4横 1ページ固定用 印刷スタイル             */
-    /* ========================================== */
     @page {
       size: A4 landscape;
       margin: 8mm 6mm;
@@ -40,11 +37,7 @@
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
-      table {
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
-      }
-      tr {
+      table, tr {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
@@ -53,16 +46,12 @@
         font-size: 10px !important;
         line-height: 1.2 !important;
       }
-
-      /* 定休日の網掛け（印刷時） */
       .closed-pattern {
         background-color: #f1f5f9 !important;
         background-image: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 3px, #f1f5f9 3px, #f1f5f9 8px) !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-
-      /* シフトが入っているセルの薄い塗りつぶし（印刷時） */
       .cell-assigned {
         background-color: #f1f5f9 !important;
         color: #0f172a !important;
@@ -85,8 +74,8 @@
     <!-- ヘッダー -->
     <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 no-print">
       <div>
-        <h1 class="font-bold text-lg text-slate-900" id="headerTitle">シフト希望提出</h1>
-        <p class="text-xs text-slate-500" id="headerSub">17:00〜20:00入り・ALL / PIN個別認証・確定保存対応</p>
+        <h1 class="font-bold text-lg text-slate-900" id="headerTitle">シフト管理</h1>
+        <p class="text-xs text-slate-500" id="headerSub">17:00〜20:00入り・ALL / 確定保存・公開対応</p>
       </div>
 
       <div class="flex items-center gap-2">
@@ -104,47 +93,56 @@
     </header>
 
     <!-- ========================================== -->
-    <!-- 0. スタッフ初期ログイン画面（名前 ＆ PIN） -->
+    <!-- 0. トップ画面（完成シフト閲覧 ＆ PINログイン） -->
     <!-- ========================================== -->
-    <div id="staffAuthGate" class="max-w-sm mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
+    <div id="staffAuthGate" class="max-w-sm mx-auto space-y-4">
       
-      <!-- 公開中シフトがある場合の案内バッジ -->
-      <div id="publicShiftBanner" class="hidden bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center space-y-2">
-        <span class="inline-block bg-emerald-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">確定シフト公開中</span>
-        <p class="text-xs font-bold text-emerald-900" id="publicShiftLabel"></p>
-        <button onclick="openPublicShiftModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs transition shadow-xs flex items-center justify-center gap-1.5">
+      <!-- 完成シフト閲覧カード（常時表示） -->
+      <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-5 text-white space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="bg-white/20 backdrop-blur-xs text-[10px] font-extrabold px-2 py-0.5 rounded-full">確定シフト</span>
+          <span id="publicStatusText" class="text-[11px] font-medium text-emerald-100"></span>
+        </div>
+        <div>
+          <h3 class="font-bold text-base" id="topCardShopTitle">完成シフト表</h3>
+          <p class="text-xs text-emerald-100 mt-0.5">最新の確定シフトを誰でも確認できます</p>
+        </div>
+        <button onclick="openPublicShiftModal()" class="w-full bg-white text-emerald-800 hover:bg-emerald-50 font-bold py-2.5 rounded-xl text-xs transition shadow-sm flex items-center justify-center gap-1.5">
           <span>👀</span>
           <span>完成シフト表を見る</span>
         </button>
       </div>
 
-      <div class="text-center space-y-1">
-        <div class="text-3xl">👤</div>
-        <h2 class="font-bold text-base text-slate-900">スタッフログイン</h2>
-        <p class="text-xs text-slate-400">お名前を選択し、暗証番号を入力してください</p>
-      </div>
-
-      <div class="space-y-3">
-        <div>
-          <label class="block text-xs font-bold text-slate-600 mb-1">お名前</label>
-          <select id="loginStaffSelect" class="w-full border border-slate-300 rounded-lg p-2.5 text-xs font-bold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"></select>
+      <!-- スタッフ希望提出ログインカード -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
+        <div class="text-center space-y-1">
+          <div class="text-3xl">👤</div>
+          <h2 class="font-bold text-base text-slate-900">シフト希望を提出する</h2>
+          <p class="text-xs text-slate-400">お名前を選び、暗証番号を入力してください</p>
         </div>
 
-        <div>
-          <label class="block text-xs font-bold text-slate-600 mb-1">暗証番号（PIN）</label>
-          <input 
-            type="password" 
-            id="staffPinInput" 
-            placeholder="初期PIN: 0000" 
-            class="w-full border border-slate-300 rounded-lg p-2.5 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            onkeydown="if(event.key === 'Enter') submitStaffLogin()"
-          />
-          <p class="text-[11px] text-slate-400 mt-1 text-center">※初めての方は「0000」を入力</p>
-        </div>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">お名前</label>
+            <select id="loginStaffSelect" class="w-full border border-slate-300 rounded-lg p-2.5 text-xs font-bold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"></select>
+          </div>
 
-        <button onclick="submitStaffLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs shadow-sm transition">
-          ログインして希望を提出する
-        </button>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">暗証番号（PIN）</label>
+            <input 
+              type="password" 
+              id="staffPinInput" 
+              placeholder="初期PIN: 0000" 
+              class="w-full border border-slate-300 rounded-lg p-2.5 text-center text-lg font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              onkeydown="if(event.key === 'Enter') submitStaffLogin()"
+            />
+            <p class="text-[11px] text-slate-400 mt-1 text-center">※初めての方は「0000」を入力</p>
+          </div>
+
+          <button onclick="submitStaffLogin()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg text-xs shadow-sm transition">
+            ログインして希望を入力
+          </button>
+        </div>
       </div>
     </div>
 
@@ -166,10 +164,8 @@
         </div>
       </div>
 
-      <!-- 日付ごとの選択リスト -->
       <div id="staffDaysList" class="space-y-2 max-h-[500px] overflow-y-auto pr-1"></div>
 
-      <!-- 送信・確定コントロールエリア -->
       <div class="pt-3 border-t border-slate-100 space-y-3">
         <div class="flex items-center justify-between">
           <span id="draftNotice" class="text-xs text-slate-400">選択後、下の送信ボタンを押して確定してください</span>
@@ -230,7 +226,6 @@
           </button>
         </div>
 
-        <!-- 登録スタッフ一覧（PIN編集・削除） -->
         <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100" id="staffTagList"></div>
       </div>
 
@@ -299,7 +294,6 @@
       <!-- シフト表（印刷対象エリア） -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 print-area space-y-2 md:space-y-3">
         
-        <!-- 印刷時・PDF出力時に大きく表示されるヘッダー -->
         <div class="border-b-2 border-slate-800 pb-1.5 flex items-baseline justify-between">
           <div class="flex items-center gap-3">
             <h2 class="text-sm md:text-base font-extrabold text-slate-900 tracking-wide" id="printHeadingTitle">
@@ -308,7 +302,6 @@
             <span id="adminPublishedBadge" class="no-print text-xs font-bold px-2 py-0.5 rounded"></span>
           </div>
           
-          <!-- 表示切り替えタブ（確定シフト ⇄ スタッフ提出希望プレビュー） -->
           <div class="no-print flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
             <button id="tabFinal" onclick="switchAdminTab('final')" class="px-3 py-1 rounded font-bold bg-white text-indigo-700 shadow-xs">
               確定シフト
@@ -327,7 +320,6 @@
           👁️ スタッフが提出したオリジナルの希望内容を表示しています（管理者による上書き前データ・閲覧専用）。
         </div>
 
-        <!-- 上段テーブル -->
         <div>
           <div class="font-bold text-[11px] text-slate-600 mb-0.5 px-1 flex items-center justify-between">
             <span>【上段】 1日 〜 15日</span>
@@ -338,7 +330,6 @@
           </div>
         </div>
 
-        <!-- 下段テーブル -->
         <div>
           <div class="font-bold text-[11px] text-slate-600 mb-0.5 px-1">【下段】 16日 〜 月末</div>
           <div class="overflow-x-auto">
@@ -349,7 +340,7 @@
     </div>
   </div>
 
-  <!-- 完成シフト閲覧モーダル（スタッフがトップから確認できる全画面表） -->
+  <!-- 完成シフト閲覧モーダル（全画面表） -->
   <div id="publicShiftModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 z-50">
     <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col p-4 md:p-6 space-y-4">
       <div class="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -412,7 +403,6 @@
         ✨ ALL
       </button>
 
-      <!-- 15:00〜20:00のボタン群 -->
       <div id="timeButtonsGrid" class="grid grid-cols-3 gap-1.5"></div>
 
       <div class="flex gap-2 pt-2 border-t border-slate-100">
@@ -428,9 +418,7 @@
     // ==========================================
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzhZF_FFdjS7TDegj33pnMPkgPZUe414S9eMkxB09yG62sX3kmgPQ5ZU4pJm2VuUYHL5A/exec';
 
-    // スタッフ用（17:00〜20:00）
     const STAFF_ENTRY_TIMES = ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
-    // 管理者調整用（15:00〜20:00）
     const ADMIN_ENTRY_TIMES = [
       '15:00', '15:30', '16:00', '16:30',
       '17:00', '17:30', '18:00', '18:30',
@@ -536,6 +524,20 @@
       state.shopName = val.trim();
       executeSaveToCloud();
       updatePrintHeader();
+      updateTopCardHeader();
+    }
+
+    function updateTopCardHeader() {
+      const name = state.shopName ? `【${state.shopName}】` : '';
+      document.getElementById('topCardShopTitle').textContent = `${name} ${state.year}年${state.month}月 シフト`;
+      const statusText = document.getElementById('publicStatusText');
+      if (state.isPublished) {
+        statusText.textContent = '● 公開中';
+        statusText.className = 'text-[11px] font-bold text-white bg-emerald-700/60 px-2 py-0.5 rounded-full';
+      } else {
+        statusText.textContent = '○ 作成中（非公開）';
+        statusText.className = 'text-[11px] font-medium text-emerald-100';
+      }
     }
 
     async function togglePublishShift() {
@@ -543,7 +545,7 @@
       await executeSaveToCloud();
       renderAll();
       alert(state.isPublished 
-        ? 'シフトを【完成・公開】にしました！\nトップ画面からスタッフが誰でも閲覧できるようになりました。' 
+        ? 'シフトを【完成・公開】にしました！\nトップ画面からスタッフ全員が閲覧可能になりました。' 
         : 'シフトを【下書き（非公開）】に戻しました。'
       );
     }
@@ -637,7 +639,6 @@
         selMonth.appendChild(opt);
       }
 
-      // 管理者用の時間ボタン（15:00〜20:00）
       const grid = document.getElementById('timeButtonsGrid');
       ADMIN_ENTRY_TIMES.forEach(t => {
         const btn = document.createElement('button');
@@ -683,6 +684,10 @@
     // トップ画面での完成シフト閲覧モーダル
     // ==========================================
     function openPublicShiftModal() {
+      if (!state.isPublished && !state.isAdmin) {
+        alert('現在シフトを作成・調整中です。\n公開されるまでもう少々お待ちください！');
+        return;
+      }
       const name = state.shopName ? `【${state.shopName}】` : '';
       document.getElementById('publicModalTitle').textContent = `${name} ${state.year}年${state.month}月 確定シフト表`;
       const days = getDays();
@@ -906,7 +911,6 @@
       const adminView = document.getElementById('adminView');
       const btnOpenLogin = document.getElementById('btnOpenLogin');
       const adminNavGroup = document.getElementById('adminNavGroup');
-      const pubBanner = document.getElementById('publicShiftBanner');
 
       if (state.isAdmin) {
         gate.classList.add('hidden');
@@ -933,15 +937,8 @@
         btnOpenLogin.classList.remove('hidden');
         adminNavGroup.classList.add('hidden');
         document.getElementById('headerTitle').textContent = 'バイトシフト管理';
-        document.getElementById('headerSub').textContent = 'スタッフログイン または 完成シフトの確認';
-
-        if (state.isPublished) {
-          pubBanner.classList.remove('hidden');
-          const name = state.shopName ? `【${state.shopName}】` : '';
-          document.getElementById('publicShiftLabel').textContent = `${name} ${state.year}年${state.month}月のシフトが完成しました`;
-        } else {
-          pubBanner.classList.add('hidden');
-        }
+        document.getElementById('headerSub').textContent = 'シフトの確認 または 希望提出';
+        updateTopCardHeader();
       }
     }
 
@@ -1051,6 +1048,7 @@
 
     function renderAll() {
       updatePrintHeader();
+      updateTopCardHeader();
       const days = getDays();
       renderTable('tableTopHalf', days.slice(0, 15));
       renderTable('tableBottomHalf', days.slice(15));
@@ -1113,7 +1111,6 @@
           const val = dataSource[`${s}_${d.dateKey}`] || '';
 
           if (d.isClosed) {
-            // 定休日の網掛けスタイル
             td.className = "border border-slate-300 closed-pattern text-slate-400 select-none";
             td.textContent = "-";
           } else {
@@ -1124,10 +1121,10 @@
               cellStyle = 'bg-amber-50 text-amber-700 font-bold';
             } else if (val === 'ALL') {
               cellStyle = 'bg-emerald-50 text-emerald-700 font-bold text-xs tracking-wider';
-              printAssignClass = 'cell-assigned'; // PDF印刷時に薄く塗りつぶし
+              printAssignClass = 'cell-assigned';
             } else if (val) {
               cellStyle = 'bg-indigo-50 text-indigo-700 font-bold';
-              printAssignClass = 'cell-assigned'; // PDF印刷時に薄く塗りつぶし
+              printAssignClass = 'cell-assigned';
             }
 
             if (adminViewTab === 'final') {
